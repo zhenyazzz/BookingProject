@@ -1,0 +1,30 @@
+syntax = "proto3";
+
+import "google/protobuf/empty.proto";
+
+option java_multiple_files = true;
+option java_package = "com.booking.inventory.grpc";
+
+service InventoryService {
+  rpc ReserveSeats (ReserveSeatsRequest) returns (ReserveSeatsResponse);
+  rpc ConfirmReservation (ConfirmReservationRequest) returns (google.protobuf.Empty);
+  rpc ReleaseReservation (ReleaseReservationRequest) returns (google.protobuf.Empty);
+}
+
+message ReserveSeatsRequest {
+  string tripId = 1;
+  int32 seats = 2;
+}
+
+message ReserveSeatsResponse {
+  string reservationId = 1;
+  string expiresAt = 2;
+}
+
+message ConfirmReservationRequest {
+  string reservationId = 1;
+}
+
+message ReleaseReservationRequest {
+  string reservationId = 1;
+}

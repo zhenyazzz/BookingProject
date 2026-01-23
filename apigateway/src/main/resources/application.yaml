@@ -1,0 +1,159 @@
+spring:
+  application:
+    name: api-gateway
+
+  cloud:
+    gateway:
+      server:
+        webmvc:
+          routes:
+            - id: trip-service
+              uri: ${TRIP_SERVICE_URL:http://trip-service:8086}
+              predicates:
+                - Path=/routes/**, /trips/**
+              filters:
+                - name: CircuitBreaker
+                  args:
+                    name: tripServiceCircuitBreaker
+                    fallbackUri: forward:/fallback/trip
+            - id: trip-service-api-docs
+              uri: ${TRIP_SERVICE_URL:http://trip-service:8086}
+              predicates:
+                - Path=/docs/tripservice/v3/api-docs
+              filters:
+                - SetPath=/v3/api-docs
+
+            - id: inventory-service-events
+              uri: ${INVENTORY_SERVICE_URL:http://inventory-service:8080}
+              predicates:
+                - Path=/api/v1/events, /api/v1/venues
+              filters:
+                - name: CircuitBreaker
+                  args:
+                    name: inventoryServiceCircuitBreaker
+                    fallbackUri: forward:/fallback/inventory
+            - id: inventory-service-path-vars
+              uri: ${INVENTORY_SERVICE_URL:http://inventory-service:8080}
+              predicates:
+                - Path=/api/v1/venue/{venueId}, /api/v1/event/{eventId}
+              filters:
+                - name: CircuitBreaker
+                  args:
+                    name: inventoryServiceCircuitBreaker
+                    fallbackUri: forward:/fallback/inventory
+            - id: inventory-service-api-docs
+              uri: ${INVENTORY_SERVICE_URL:http://inventory-service:8080}
+              predicates:
+                - Path=/docs/inventoryservice/v3/api-docs
+              filters:
+                - SetPath=/v3/api-docs
+
+            - id: payment-service
+              uri: ${PAYMENT_SERVICE_URL:http://payment-service:8085}
+              predicates:
+                - Path=/api/v1/payments/create-payment-intent/{orderId},/api/v1/payments/status/{orderId},/api/v1/payments/stripe
+              filters:
+                - name: CircuitBreaker
+                  args:
+                    name: paymentServiceCircuitBreaker
+                    fallbackUri: forward:/fallback/payment
+            - id: payment-service-api-docs
+              uri: ${PAYMENT_SERVICE_URL:http://payment-service:8085}
+              predicates:
+                - Path=/docs/paymentservice/v3/api-docs
+              filters:
+                - SetPath=/v3/api-docs
+
+            - id: booking-service
+              uri: ${BOOKING_SERVICE_URL:http://booking-service:8081}
+              predicates:
+                - Path=/api/v1/booking
+                - Method=POST
+              filters:
+                - name: CircuitBreaker
+                  args:
+                    name: bookingServiceCircuitBreaker
+                    fallbackUri: forward:/fallback/booking
+            - id: booking-service-api-docs
+              uri: ${BOOKING_SERVICE_URL:http://booking-service:8081}
+              predicates:
+                - Path=/docs/bookingservice/v3/api-docs
+              filters:
+                - SetPath=/v3/api-docs
+
+  security:
+    oauth2:
+      resourceserver:
+        jwt:
+          issuer-uri: ${KEYCLOAK_ISSUER_URI:http://keycloak:8080/realms/ticketing-security-realm}
+  
+  mvc:
+    cors:
+      mappings:
+        '[/**]':
+          allowed-origins: ${ALLOWED_ORIGINS:http://localhost:8086}
+          allowed-methods: "GET,POST,PUT,DELETE,OPTIONS"
+          allow-credentials: true
+
+server:
+  port: 8090
+
+keycloak:
+  auth:
+    jwk-set-uri: ${KEYCLOAK_JWKS_URI:http://keycloak:8080/realms/ticketing-security-realm/protocol/openid-connect/certs}
+
+springdoc:
+  swagger-ui:
+    path: /swagger-ui.html
+    urls:
+      - name: Inventory Service
+        url: /docs/inventoryservice/v3/api-docs
+      - name: Booking Service
+        url: /docs/bookingservice/v3/api-docs
+      - name: Payment Service
+        url: /docs/paymentservice/v3/api-docs
+      - name: Trip Service
+        url: /docs/tripservice/v3/api-docs
+  api-docs:
+    path: /v3/api-docs
+
+security:
+  excluded:
+    urls: /swagger-ui.html, /swagger-ui/**, /docs/**, /v3/api-docs/**, /swagger-resources/**, /api-docs/**
+
+management:
+  tracing:
+    sampling:
+      probability: 1.0
+  health:
+    circuitbreakers:
+      enabled: true
+  endpoints:
+    web:
+      exposure:
+        include: "*"
+  endpoint:
+    health:
+      show-details: always
+
+resilience4j:
+  circuitbreaker:
+    configs:
+      default:
+        registerHealthIndicator: true
+        slidingWindowType: COUNT_BASED
+        slidingWindowSize: 8
+        failureRateThreshold: 50
+        minimum-number-of-calls: 4
+        waitDurationInOpenState: 5s
+        permittedNumberOfCallsInHalfOpenState: 2
+        automaticTransitionFromOpenToHalfOpenEnabled: true
+  timelimiter:
+    configs:
+      default:
+        timeout-duration: 3s
+  retry:
+    configs:
+      default:
+        max-attempts: 3
+        wait-duration: 2s
