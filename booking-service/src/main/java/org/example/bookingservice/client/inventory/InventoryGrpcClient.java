@@ -7,6 +7,7 @@ import com.booking.inventory.grpc.ConfirmReservationRequest;
 import com.booking.inventory.grpc.ReleaseReservationRequest;
 import org.springframework.stereotype.Component;
 import lombok.RequiredArgsConstructor;
+import java.util.UUID;
 
 @Component
 @RequiredArgsConstructor

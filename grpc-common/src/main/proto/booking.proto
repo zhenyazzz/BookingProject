@@ -13,7 +13,7 @@ service InventoryService {
 
 message ReserveSeatsRequest {
   string tripId = 1;
-  int32 seats = 2;
+  repeated int32 seatNumbers = 2;
 }
 
 message ReserveSeatsResponse {

@@ -2,6 +2,9 @@ package org.example.tripservice.service;
 
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+
+import org.example.kafka.event.TripCreatedEvent;
+import org.example.kafka.event.TripCancelledEvent;
 import org.example.tripservice.dto.request.TripCreateRequest;
 import org.example.tripservice.dto.request.TripUpdateRequest;
 import org.example.tripservice.dto.response.TripResponse;
@@ -23,6 +26,7 @@ import org.springframework.cache.annotation.CacheEvict;
 import org.springframework.cache.annotation.CachePut;
 import org.springframework.cache.annotation.Cacheable;
 import io.micrometer.observation.annotation.Observed;
+import org.springframework.kafka.core.KafkaTemplate;
 
 import java.time.LocalDate;
 import java.util.UUID;
@@ -36,6 +40,7 @@ public class TripService {
     private final TripRepository tripRepository;
     private final RouteRepository routeRepository;
     private final TripMapper tripMapper;
+    private final KafkaTemplate<String, Object> kafkaTemplate;
 
     @Transactional
     @CacheEvict(value = "trip-pages", allEntries = true)
@@ -54,6 +59,10 @@ public class TripService {
         log.info("Trip created: ID={}, Route={} -> {}, Time={}", 
                 savedTrip.getId(), route.getFromCity(), route.getToCity(), savedTrip.getDepartureTime());
         
+        TripCreatedEvent event = tripMapper.toCreatedEvent(savedTrip);
+
+        kafkaTemplate.send("trip.created", event.tripId().toString(), event);
+
         return tripMapper.toResponse(savedTrip);
     }
 
@@ -98,10 +107,18 @@ public class TripService {
             }
         }
 
+        if (request.routeId() != null) {
+            Route route = routeRepository.findById(request.routeId())
+                    .orElseThrow(() -> new RouteNotFoundException("Route not found with id: " + request.routeId()));
+            trip.setRoute(route);
+        }
+
         tripMapper.updateEntity(request, trip);
         Trip updatedTrip = tripRepository.save(trip);
         
-        log.info("Trip updated: ID={}, New Time={}", updatedTrip.getId(), updatedTrip.getDepartureTime());
+        log.info("Trip updated: ID={}, New Time={}, New Route={}", 
+                updatedTrip.getId(), updatedTrip.getDepartureTime(), 
+                updatedTrip.getRoute() != null ? updatedTrip.getRoute().getId() : "N/A");
         
         return tripMapper.toResponse(updatedTrip);
     }
@@ -109,10 +126,14 @@ public class TripService {
     @Transactional
     @CacheEvict(value = "trip-pages", allEntries = true)
     public void deleteTripById(UUID id) {
-        if (!tripRepository.existsById(id)) {
-            throw new TripNotFoundException("Trip not found with id: " + id);
-        }
-        tripRepository.deleteById(id);
+        Trip trip = tripRepository.findById(id)
+                .orElseThrow(() -> new TripNotFoundException("Trip not found with id: " + id));
+        
+        tripRepository.delete(trip);
         log.info("Trip deleted: ID={}", id);
+        
+        TripCancelledEvent event = tripMapper.toCancelledEvent(trip);
+        kafkaTemplate.send("trip.cancelled", event.tripId().toString(), event);
     }
+
 }

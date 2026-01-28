@@ -3,7 +3,6 @@ package org.example.bookingservice.client.payment;
 import org.springframework.stereotype.Component;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.web.reactive.function.client.WebClient;
-import java.util.UUID;
 
 @Component
 public class PaymentClient {
@@ -14,14 +13,13 @@ public class PaymentClient {
         this.webClient = webClientBuilder.baseUrl(paymentUrl).build();
     }
 
-    public String createPayment(UUID orderId) {
+    public CreatePaymentResponse createPayment(CreatePaymentRequest createPaymentRequest) {
         return webClient.post()
                 .uri("/api/v1/payments")
-                .bodyValue(new CreatePaymentRequest(orderId))
+                .bodyValue(createPaymentRequest)
                 .retrieve()
                 .bodyToMono(CreatePaymentResponse.class)
-                .block()
-                .paymentUrl();
+                .block();
     }
 }
 

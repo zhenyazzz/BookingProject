@@ -4,6 +4,7 @@ import lombok.RequiredArgsConstructor;
 import jakarta.validation.Valid;
 import org.example.bookingservice.dto.request.BookingRequest;
 import org.example.bookingservice.dto.response.BookingResponse;
+import org.example.bookingservice.dto.response.CreateBookingResponse;
 import org.example.bookingservice.model.BookingStatus;
 import org.example.bookingservice.service.BookingService;
 import org.example.bookingservice.controller.docs.BookingControllerDocs;
@@ -23,7 +24,7 @@ public class BookingController implements BookingControllerDocs {
 
     @Override
     @PostMapping(consumes = "application/json", produces = "application/json", path = "/create")
-    public ResponseEntity<BookingResponse> createBooking(@Valid @RequestBody BookingRequest bookingRequest){
+    public ResponseEntity<CreateBookingResponse> createBooking(@Valid @RequestBody BookingRequest bookingRequest){
         return ResponseEntity.ok(bookingService.createBooking(bookingRequest));
     }
 

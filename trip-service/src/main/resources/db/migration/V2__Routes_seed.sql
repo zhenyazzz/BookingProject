@@ -43,7 +43,8 @@ INSERT INTO trips (
     departure_time,
     arrival_time,
     price,
-    total_seats
+    total_seats,
+    status
 )
 SELECT
     gen_random_uuid(),
@@ -51,7 +52,8 @@ SELECT
     (CURRENT_DATE + day_offset) + time_offset,
     (CURRENT_DATE + day_offset) + time_offset + INTERVAL '3 hours',
     price,
-    50
+    50,
+    'SCHEDULED'
 FROM routes r
 CROSS JOIN (
     SELECT

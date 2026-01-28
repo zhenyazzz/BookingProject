@@ -6,6 +6,7 @@ import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import org.example.bookingservice.dto.request.BookingRequest;
 import org.example.bookingservice.dto.response.BookingResponse;
+import org.example.bookingservice.dto.response.CreateBookingResponse;
 import org.example.bookingservice.model.BookingStatus;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -19,7 +20,7 @@ public interface BookingControllerDocs {
     @Operation(summary = "Создать новое бронирование", description = "Создает временное бронирование для указанной поездки")
     @ApiResponse(responseCode = "200", description = "Бронирование успешно создано")
     @ApiResponse(responseCode = "400", description = "Некорректные данные или недостаточно мест")
-    ResponseEntity<BookingResponse> createBooking(BookingRequest bookingRequest);
+    ResponseEntity<CreateBookingResponse> createBooking(BookingRequest bookingRequest);
 
     @Operation(summary = "Получить список всех бронирований", description = "Возвращает страницу с бронированиями с возможностью фильтрации")
     @ApiResponse(responseCode = "200", description = "Список успешно получен")

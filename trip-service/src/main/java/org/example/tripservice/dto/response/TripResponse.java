@@ -3,6 +3,8 @@ package org.example.tripservice.dto.response;
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.UUID;
+import org.example.tripservice.model.TripStatus;
+import org.example.kafka.event.BusType;
 
 public record TripResponse(
     UUID id,
@@ -10,6 +12,8 @@ public record TripResponse(
     LocalDateTime departureTime,
     LocalDateTime arrivalTime,
     BigDecimal price,
-    int totalSeats
+    int totalSeats,
+    TripStatus status,
+    BusType busType
 ) {}
 

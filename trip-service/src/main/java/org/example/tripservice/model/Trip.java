@@ -15,16 +15,23 @@ import lombok.NoArgsConstructor;
 import lombok.AllArgsConstructor;
 import lombok.Setter;
 import java.util.UUID;
+
+import org.example.kafka.event.BusType;
+
 import java.time.LocalDateTime;
 import java.math.BigDecimal;
+import jakarta.persistence.Enumerated;
+import jakarta.persistence.EnumType;
 
 @Entity
 @Table(
     name = "trips",
     indexes = {
-        @Index(name = "idx_trip_departure", columnList = "departure_time"),
+        @Index(name = "idx_trip_status_departure", columnList = "status, departure_time"),
+        @Index(name = "idx_trip_status_arrival", columnList = "status, arrival_time"),
         @Index(name = "idx_trip_route", columnList = "route_id"),
-        @Index(name = "idx_trip_price", columnList = "price")
+        @Index(name = "idx_trip_price", columnList = "price"),
+        @Index(name = "idx_trip_departure_only", columnList = "departure_time")
     }
 )
 @Getter
@@ -54,5 +61,12 @@ public class Trip {
     @Column(name = "total_seats", nullable = false)
     private Integer totalSeats;
 
+    @Column(nullable = false)
+    @Enumerated(EnumType.STRING)
+    private TripStatus status;
+
+    @Column(nullable = false)
+    @Enumerated(EnumType.STRING)
+    private BusType busType;
 }
 

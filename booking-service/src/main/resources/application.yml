@@ -23,6 +23,9 @@ server:
 inventory:
   service:
     url: ${INVENTORY_SERVICE_URL:http://localhost:8080}
+  grpc:
+    host: inventory-service
+    port: 9090
 
 app:
   kafka:
@@ -32,12 +35,7 @@ springdoc:
   swagger-ui:
     path: /swagger-ui.html
   api-docs:
-    path: /v3/api-docs
-
-inventory:
-  grpc:
-    host: inventory-service
-    port: 9090
+    path: /v3/api-docs  
 
 order:
   service:
@@ -46,4 +44,10 @@ order:
 payment:
   service:
     url: http://payment-service:8085
+
+trip:
+  service:
+    url: ${TRIP_SERVICE_URL:http://trip-service:8083}
+
+
 

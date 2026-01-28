@@ -1,7 +1,7 @@
 package org.example.kafka.event;
 
-import java.util.UUID;
 import java.time.Instant;
+import java.util.UUID;
 
 public record PaymentSucceededEvent(
     UUID eventId,

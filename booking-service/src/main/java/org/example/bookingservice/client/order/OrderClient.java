@@ -14,14 +14,13 @@ public class OrderClient {
         this.webClient = webClientBuilder.baseUrl(orderUrl).build();
     }
 
-    public UUID createOrder(CreateOrderRequest request) {
+    public OrderResponse createOrder(CreateOrderRequest request) {
         return webClient.post()
                 .uri("/api/v1/orders")
                 .bodyValue(request)
                 .retrieve()
                 .bodyToMono(OrderResponse.class)
-                .block()
-                .orderId();
+                .block();
     }
 
     public void cancelOrder(UUID orderId) {

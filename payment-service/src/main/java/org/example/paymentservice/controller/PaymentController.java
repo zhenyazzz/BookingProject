@@ -1,16 +1,17 @@
 package org.example.paymentservice.controller;
 
-import com.stripe.exception.StripeException;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+
+import org.example.paymentservice.dto.CreatePaymentRequest;
 import org.example.paymentservice.dto.PaymentResponse;
 import org.example.paymentservice.dto.PaymentStatusResponse;
 import org.example.paymentservice.model.Payment;
-import org.example.paymentservice.model.PaymentStatus;
 import org.example.paymentservice.service.PaymentService;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
+
+import java.util.UUID;
 
 @RestController
 @RequestMapping("/api/v1/payments")
@@ -20,20 +21,19 @@ public class PaymentController {
 
     private final PaymentService paymentService;
 
-    @PostMapping("/create-payment-intent/{orderId}")
-    public ResponseEntity<PaymentResponse> createPaymentIntent(@PathVariable Long orderId) {
+    @PostMapping
+    public ResponseEntity<String> createPayment(@RequestBody CreatePaymentRequest request) {
         try {
-            PaymentResponse response = paymentService.createPayment(orderId);
-            return ResponseEntity.ok(response);
+            String paymentUrl = paymentService.createPayment(request);
+            return ResponseEntity.ok(paymentUrl);
         } catch (Exception e) {
-            log.error("Failed to create payment intent for order {}", orderId, e);
-            return ResponseEntity.internalServerError()
-                    .body(new PaymentResponse(null, "FAILED", 0L, "none", "0"));
+            log.error("Failed to create payment for order {}", request.orderId(), e);
+            return ResponseEntity.internalServerError().build();
         }
     }
 
     @GetMapping("/status/{orderId}")
-    public ResponseEntity<PaymentStatusResponse> getStatus(@PathVariable Long orderId) {
+    public ResponseEntity<PaymentStatusResponse> getStatus(@PathVariable UUID orderId) {
         try {
             Payment payment = paymentService.getPaymentByOrderId(orderId);
             return ResponseEntity.ok(new PaymentStatusResponse(payment.getId(), payment.getStatus()));

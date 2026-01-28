@@ -3,40 +3,67 @@ package org.example.orderservice.model;
 import jakarta.persistence.*;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
-import lombok.Data;
+import lombok.Getter;
 import lombok.NoArgsConstructor;
+import lombok.Setter;
 import org.hibernate.annotations.CreationTimestamp;
+import org.hibernate.annotations.UpdateTimestamp;
 
 import java.math.BigDecimal;
-import java.time.LocalDateTime;
+import java.time.Instant;
+import java.util.UUID;
 
 @Entity
-@Data
+@Getter
+@Setter
 @NoArgsConstructor
 @AllArgsConstructor
 @Builder
-@Table(name = "`order`")
+@Table(name = "orders", indexes = {
+    @Index(name = "idx_order_user", columnList = "user_id"),
+    @Index(name = "idx_order_trip", columnList = "trip_id"),
+    @Index(name = "idx_order_status", columnList = "status"),
+    @Index(name = "idx_order_reservation", columnList = "reservation_id")
+})
 public class Order {
     @Id
-    @GeneratedValue(strategy = GenerationType.IDENTITY)
-    private Long id;
+    @GeneratedValue(strategy = GenerationType.UUID)
+    @Column(nullable = false, updatable = false)
+    private UUID id;
 
-    @Column(name = "total")
+    @Column(name = "user_id", nullable = false)
+    private UUID userId;
+
+    @Column(name = "trip_id", nullable = false)
+    private UUID tripId;
+
+    @Column(name = "seats_count", nullable = false)
+    private Integer seatsCount;
+
+    @Column(name = "total_price", nullable = false, precision = 10, scale = 2)
     private BigDecimal totalPrice;
 
-    @Column(name="quantity")
-    private Long ticketCount;
-
-    @CreationTimestamp
-    @Column(name = "placed_at", updatable = false, nullable = false)
-    private LocalDateTime placedAt;
+    @Column(name = "reservation_id")
+    private UUID reservationId;
 
     @Enumerated(EnumType.STRING)
+    @Column(nullable = false)
     private OrderStatus status;
 
-    @Column(name = "customer_id")
-    private Long customerId;
+    @CreationTimestamp
+    @Column(name = "created_at", nullable = false, updatable = false)
+    private Instant createdAt;
 
-    @Column(name = "event_id")
-    private Long eventId;
+    @UpdateTimestamp
+    @Column(name = "updated_at", nullable = false)
+    private Instant updatedAt;
+
+    public void confirm() {
+        this.status = OrderStatus.CONFIRMED;
+    }
+
+  
+    public void cancel() {
+        this.status = OrderStatus.CANCELLED;
+    }
 }

@@ -1,9 +1,10 @@
 package org.example.bookingservice.client.order;
 
+import java.math.BigDecimal;
 import java.util.UUID;
 
 public record OrderResponse(
-    UUID orderId,
+    UUID id,
+    BigDecimal totalPrice,
     String status
 ) {}
-

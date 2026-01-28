@@ -12,10 +12,20 @@ CREATE TABLE trips (
     arrival_time TIMESTAMP NOT NULL,
     price DECIMAL(10, 2) NOT NULL,
     total_seats INTEGER NOT NULL,
+    status VARCHAR(50) NOT NULL DEFAULT 'SCHEDULED',
+    bus_type VARCHAR(50) NOT NULL,
+
     CONSTRAINT fk_trip_route FOREIGN KEY (route_id) REFERENCES routes(id)
 );
 
-CREATE INDEX idx_trip_departure ON trips(departure_time);
+CREATE INDEX idx_trip_status_departure
+ON trips (status, departure_time);
+
+CREATE INDEX idx_trip_status_arrival
+ON trips (status, arrival_time);
+
 CREATE INDEX idx_trip_route ON trips(route_id);
 CREATE INDEX idx_trip_price ON trips(price);
+CREATE INDEX idx_trip_departure ON trips(departure_time);
+
 
