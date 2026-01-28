@@ -1,5 +1,8 @@
 package org.example.tripservice.service;
 
+import org.example.kafka.event.BusType;
+import org.example.kafka.event.TripCancelledEvent;
+import org.example.kafka.event.TripCreatedEvent;
 import org.example.tripservice.dto.request.TripCreateRequest;
 import org.example.tripservice.dto.request.TripUpdateRequest;
 import org.example.tripservice.dto.response.RouteResponse;
@@ -22,8 +25,11 @@ import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.domain.Specification;
+import org.springframework.kafka.core.KafkaTemplate;
 
+import org.example.tripservice.model.TripStatus;
 import java.math.BigDecimal;
+import java.time.Instant;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Optional;
@@ -44,6 +50,9 @@ class TripServiceTest {
 
     @Mock
     private TripMapper tripMapper;
+
+    @Mock
+    private KafkaTemplate<String, Object> kafkaTemplate;
 
     @InjectMocks
     private TripService tripService;
@@ -74,18 +83,21 @@ class TripServiceTest {
 
         RouteResponse routeResponse = new RouteResponse(routeId, "Moscow", "Saint Petersburg");
         tripResponse = new TripResponse(tripId, routeResponse, trip.getDepartureTime(), 
-                trip.getArrivalTime(), trip.getPrice(), trip.getTotalSeats());
+                trip.getArrivalTime(), trip.getPrice(), trip.getTotalSeats(), 
+                TripStatus.SCHEDULED, BusType.BUS_50);
     }
 
     @Test
     void createTrip_Success() {
         TripCreateRequest request = new TripCreateRequest(routeId, 
                 LocalDateTime.now().plusDays(1), LocalDateTime.now().plusDays(1).plusHours(4),
-                BigDecimal.valueOf(1500), 50);
+                BigDecimal.valueOf(1500), BusType.BUS_50);
+        TripCreatedEvent event = new TripCreatedEvent(UUID.randomUUID(), tripId, BusType.BUS_50, Instant.now());
 
         when(routeRepository.findById(routeId)).thenReturn(Optional.of(route));
         when(tripMapper.toEntity(eq(request), eq(route))).thenReturn(trip);
         when(tripRepository.save(any(Trip.class))).thenReturn(trip);
+        when(tripMapper.toCreatedEvent(trip)).thenReturn(event);
         when(tripMapper.toResponse(trip)).thenReturn(tripResponse);
 
         TripResponse result = tripService.createTrip(request);
@@ -93,23 +105,25 @@ class TripServiceTest {
         assertNotNull(result);
         assertEquals(tripId, result.id());
         verify(tripRepository).save(any(Trip.class));
+        verify(kafkaTemplate).send(eq("trip.created"), eq(tripId.toString()), eq(event));
     }
 
     @Test
     void createTrip_InvalidTime() {
         TripCreateRequest request = new TripCreateRequest(routeId, 
                 LocalDateTime.now().plusDays(1).plusHours(4), LocalDateTime.now().plusDays(1),
-                BigDecimal.valueOf(1500), 50);
+                BigDecimal.valueOf(1500), BusType.BUS_50);
 
         assertThrows(IllegalArgumentException.class, () -> tripService.createTrip(request));
         verify(tripRepository, never()).save(any(Trip.class));
+        verify(kafkaTemplate, never()).send(anyString(), anyString(), any());
     }
 
     @Test
     void createTrip_RouteNotFound() {
         TripCreateRequest request = new TripCreateRequest(routeId, 
                 LocalDateTime.now().plusDays(1), LocalDateTime.now().plusDays(1).plusHours(4),
-                BigDecimal.valueOf(1500), 50);
+                BigDecimal.valueOf(1500), BusType.BUS_50);
 
         when(routeRepository.findById(routeId)).thenReturn(Optional.empty());
 
@@ -155,7 +169,7 @@ class TripServiceTest {
         TripUpdateRequest request = new TripUpdateRequest(
                 LocalDateTime.now().plusDays(2), 
                 LocalDateTime.now().plusDays(2).plusHours(4),
-                BigDecimal.valueOf(2000), 40);
+                BigDecimal.valueOf(2000), null);
 
         when(tripRepository.findById(tripId)).thenReturn(Optional.of(trip));
         when(tripRepository.save(trip)).thenReturn(trip);
@@ -169,19 +183,43 @@ class TripServiceTest {
     }
 
     @Test
+    void updateTrip_WithRouteUpdate() {
+        UUID newRouteId = UUID.randomUUID();
+        Route newRoute = new Route();
+        newRoute.setId(newRouteId);
+        
+        TripUpdateRequest request = new TripUpdateRequest(
+                null, null, null, newRouteId);
+
+        when(tripRepository.findById(tripId)).thenReturn(Optional.of(trip));
+        when(routeRepository.findById(newRouteId)).thenReturn(Optional.of(newRoute));
+        when(tripRepository.save(trip)).thenReturn(trip);
+        when(tripMapper.toResponse(trip)).thenReturn(tripResponse);
+
+        tripService.updateTrip(tripId, request);
+
+        assertEquals(newRoute, trip.getRoute());
+        verify(tripRepository).save(trip);
+    }
+
+    @Test
     void deleteTripById_Success() {
-        when(tripRepository.existsById(tripId)).thenReturn(true);
+        TripCancelledEvent event = new TripCancelledEvent(UUID.randomUUID(), tripId, Instant.now());
+        when(tripRepository.findById(tripId)).thenReturn(Optional.of(trip));
+        when(tripMapper.toCancelledEvent(trip)).thenReturn(event);
 
         tripService.deleteTripById(tripId);
 
-        verify(tripRepository).deleteById(tripId);
+        verify(tripRepository).delete(trip);
+        verify(kafkaTemplate).send(eq("trip.cancelled"), eq(tripId.toString()), eq(event));
     }
 
     @Test
     void deleteTripById_NotFound() {
-        when(tripRepository.existsById(tripId)).thenReturn(false);
+        when(tripRepository.findById(tripId)).thenReturn(Optional.empty());
 
         assertThrows(TripNotFoundException.class, () -> tripService.deleteTripById(tripId));
+        verify(kafkaTemplate, never()).send(anyString(), anyString(), any());
     }
 }
 
