@@ -42,5 +42,29 @@ public final class SecurityUtils {
 
         return null;
     }
+
+    public static String currentUserFirstName() {
+        Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
+        if (authentication != null && authentication.getPrincipal() instanceof Jwt jwt) {
+            return jwt.getClaimAsString("given_name");
+        }
+        return null;
+    }
+
+    public static String currentUserLastName() {
+        Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
+        if (authentication != null && authentication.getPrincipal() instanceof Jwt jwt) {
+            return jwt.getClaimAsString("family_name");
+        }
+        return null;
+    }
+
+    public static String currentUserPhoneNumber() {
+        Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
+        if (authentication != null && authentication.getPrincipal() instanceof Jwt jwt) {
+            return jwt.getClaimAsString("phone_number");
+        }
+        return null;
+    }
 }
 

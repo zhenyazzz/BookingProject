@@ -18,6 +18,7 @@ import java.util.UUID;
 
 import org.example.tripservice.dto.request.RouteCreateRequest;
 import org.example.tripservice.dto.response.RouteResponse;
+import org.example.tripservice.dto.response.CityResponse;
 import org.springframework.http.ResponseEntity;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -26,6 +27,7 @@ import org.example.tripservice.dto.request.RouteUpdateRequest;
 import org.example.tripservice.controller.docs.RouteControllerDocs;
 import org.springframework.security.access.prepost.PreAuthorize;
 import io.micrometer.observation.annotation.Observed;
+import java.util.List;
 
 @RestController
 @RequestMapping("/routes")
@@ -72,5 +74,11 @@ public class RouteController implements RouteControllerDocs {
     public ResponseEntity<Void> deleteRouteById(@PathVariable UUID id) {
         routeService.deleteRouteById(id);
         return ResponseEntity.noContent().build();
+    }
+
+    @Override
+    @GetMapping("/cities")
+    public ResponseEntity<List<CityResponse>> getAllCities() {
+        return ResponseEntity.ok(routeService.getAllCities());
     }
 }

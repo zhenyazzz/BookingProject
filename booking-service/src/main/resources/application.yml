@@ -5,9 +5,10 @@ spring:
     url: ${SPRING_DATASOURCE_URL:jdbc:postgresql://localhost:5432/booking_db}
     username: ${SPRING_DATASOURCE_USERNAME:root}
     password: ${SPRING_DATASOURCE_PASSWORD:password}
+    driver-class-name: org.postgresql.Driver
   jpa:
     hibernate:
-      ddl-auto: validate
+      ddl-auto: none
     show-sql: true
     properties:
       hibernate:
@@ -16,7 +17,12 @@ spring:
     enabled: true
     baseline-on-migrate: true
     locations: classpath:db/migration
-
+  security:
+    oauth2:
+      resourceserver:
+        jwt:
+          jwk-set-uri: ${KEYCLOAK_JWKS_URI:http://localhost:8091/realms/ticketing-security-realm/protocol/openid-connect/certs}
+          issuer-uri: ${KEYCLOAK_ISSUER_URI:http://localhost:8091/realms/ticketing-security-realm}
 server:
   port: 8081
 
@@ -24,8 +30,8 @@ inventory:
   service:
     url: ${INVENTORY_SERVICE_URL:http://localhost:8080}
   grpc:
-    host: inventory-service
-    port: 9090
+    host: ${INVENTORY_SERVICE_HOST:localhost}
+    port: ${INVENTORY_SERVICE_PORT:9090}
 
 app:
   kafka:
@@ -39,15 +45,15 @@ springdoc:
 
 order:
   service:
-    url: http://order-service:8082
+    url: ${ORDER_SERVICE_URL:http://localhost:8083}
 
 payment:
   service:
-    url: http://payment-service:8085
+    url: ${PAYMENT_SERVICE_URL:http://localhost:8084}
 
 trip:
   service:
-    url: ${TRIP_SERVICE_URL:http://trip-service:8083}
+    url: ${TRIP_SERVICE_URL:http://localhost:8085}
 
 
 

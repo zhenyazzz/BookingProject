@@ -7,10 +7,12 @@ import io.swagger.v3.oas.annotations.tags.Tag;
 import org.example.tripservice.dto.request.RouteCreateRequest;
 import org.example.tripservice.dto.request.RouteUpdateRequest;
 import org.example.tripservice.dto.response.RouteResponse;
+import org.example.tripservice.dto.response.CityResponse;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.http.ResponseEntity;
 
+import java.util.List;
 import java.util.UUID;
 
 @Tag(name = "Маршруты", description = "API для управления маршрутами (города отправления и прибытия)")
@@ -43,4 +45,8 @@ public interface RouteControllerDocs {
     @ApiResponse(responseCode = "204", description = "Маршрут успешно удален")
     @ApiResponse(responseCode = "404", description = "Маршрут не найден")
     ResponseEntity<Void> deleteRouteById(UUID id);
+
+    @Operation(summary = "Получить список всех городов", description = "Возвращает список всех уникальных городов из маршрутов")
+    @ApiResponse(responseCode = "200", description = "Список городов успешно получен")
+    ResponseEntity<List<CityResponse>> getAllCities();
 }

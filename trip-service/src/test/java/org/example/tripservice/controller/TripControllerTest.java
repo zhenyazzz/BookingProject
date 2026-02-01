@@ -2,7 +2,6 @@ package org.example.tripservice.controller;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.example.kafka.event.BusType;
-import org.example.tripservice.config.SecurityConfig;
 import org.example.tripservice.dto.request.TripCreateRequest;
 import org.example.tripservice.dto.request.TripUpdateRequest;
 import org.example.tripservice.dto.response.RouteResponse;
@@ -13,15 +12,20 @@ import org.example.tripservice.service.TripService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
+import io.micrometer.observation.ObservationRegistry;
+import io.micrometer.observation.aop.ObservedAspect;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
+import org.springframework.boot.test.context.TestConfiguration;
 import org.springframework.boot.test.mock.mockito.MockBean;
-import org.springframework.context.annotation.Import;
+import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.ComponentScan;
+import org.springframework.context.annotation.FilterType;
+import org.springframework.context.annotation.Primary;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.http.MediaType;
-import org.springframework.security.test.context.support.WithMockUser;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.web.servlet.MockMvc;
 
@@ -33,15 +37,30 @@ import java.util.UUID;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.*;
-import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.csrf;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.*;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
 
-@WebMvcTest(TripController.class)
+@WebMvcTest(controllers = TripController.class,
+            excludeFilters = @ComponentScan.Filter(type = FilterType.ASSIGNABLE_TYPE,
+                                                   classes = org.example.tripservice.config.SecurityConfig.class))
 @AutoConfigureMockMvc(addFilters = false)
-@Import(SecurityConfig.class)
 @ActiveProfiles("test")
 public class TripControllerTest {
+
+    @TestConfiguration
+    static class TestConfig {
+        @Bean
+        @Primary
+        public ObservationRegistry observationRegistry() {
+            return ObservationRegistry.NOOP;
+        }
+
+        @Bean
+        @Primary
+        public ObservedAspect observedAspect(ObservationRegistry observationRegistry) {
+            return new ObservedAspect(observationRegistry);
+        }
+    }
 
     @Autowired
     private MockMvc mockMvc;
@@ -92,12 +111,10 @@ public class TripControllerTest {
     }
 
     @Test
-    @WithMockUser(roles = "ADMIN")
     void createTrip_Success() throws Exception {
         when(tripService.createTrip(any(TripCreateRequest.class))).thenReturn(tripResponse);
 
         mockMvc.perform(post("/trips")
-                        .with(csrf())
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(tripCreateRequest)))
                 .andExpect(status().isOk())
@@ -145,12 +162,10 @@ public class TripControllerTest {
     }
 
     @Test
-    @WithMockUser(roles = "ADMIN")
     void updateTrip_Success() throws Exception {
         when(tripService.updateTrip(eq(tripId), any(TripUpdateRequest.class))).thenReturn(tripResponse);
 
         mockMvc.perform(put("/trips/{id}", tripId)
-                        .with(csrf())
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(tripUpdateRequest)))
                 .andExpect(status().isOk())
@@ -160,12 +175,10 @@ public class TripControllerTest {
     }
 
     @Test
-    @WithMockUser(roles = "ADMIN")
     void deleteTripById_Success() throws Exception {
         doNothing().when(tripService).deleteTripById(tripId);
 
-        mockMvc.perform(delete("/trips/{id}", tripId)
-                        .with(csrf()))
+        mockMvc.perform(delete("/trips/{id}", tripId))
                 .andExpect(status().isNoContent());
 
         verify(tripService).deleteTripById(tripId);

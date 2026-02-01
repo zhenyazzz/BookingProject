@@ -74,13 +74,13 @@ public class TripService {
                 .orElseThrow(() -> new TripNotFoundException("Trip not found with id: " + id));
     }
 
-    @Cacheable(value = "trip-pages", key = "{#fromCity, #toCity, #date, #pageable.pageNumber, #pageable.pageSize}")
     public Page<TripResponse> getTrips(String fromCity, String toCity, LocalDate date, Pageable pageable) {
         log.info("Searching trips: from={}, to={}, date={}", fromCity, toCity, date);
         
         Specification<Trip> spec = Specification.where(TripSpecifications.withFromCity(fromCity))
                 .and(TripSpecifications.withToCity(toCity))
-                .and(TripSpecifications.withDepartureDate(date));
+                .and(TripSpecifications.withDepartureDate(date))
+                .and(TripSpecifications.withDepartureNotInPast());
                 
         return tripRepository.findAll(spec, pageable)
                 .map(tripMapper::toResponse);

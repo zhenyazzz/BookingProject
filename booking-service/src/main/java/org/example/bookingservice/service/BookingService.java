@@ -23,6 +23,8 @@ import org.example.bookingservice.model.BookingStatus;
 import org.example.bookingservice.repository.BookingRepository;
 import org.example.bookingservice.util.SecurityUtils;
 import org.example.bookingservice.mapper.BookingMapper;
+import org.example.kafka.event.BookingFailedEvent;
+import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.domain.Specification;
@@ -34,6 +36,7 @@ import org.springframework.web.server.ResponseStatusException;
 import java.time.Instant;
 import java.util.UUID;
 import java.math.BigDecimal;
+import java.util.List;
 
 @Service
 @RequiredArgsConstructor
@@ -45,6 +48,7 @@ public class BookingService {
     private final OrderClient orderClient;
     private final PaymentClient paymentClient;
     private final TripClient tripClient;
+    private final KafkaTemplate<String, Object> kafkaTemplate;
 
     public CreateBookingResponse createBooking(BookingRequest request) {
         UUID userId = SecurityUtils.currentUserId();
@@ -56,7 +60,7 @@ public class BookingService {
     
         Booking booking = createInitialBooking(userId, request);
         
-        ReserveSeatsResponse reserveResponse = reserveSeats(booking);
+        ReserveSeatsResponse reserveResponse = reserveSeats(booking, request.seatNumbers());
         
         UUID reservationId = UUID.fromString(reserveResponse.getReservationId());
         Instant expiresAt = Instant.parse(reserveResponse.getExpiresAt());
@@ -114,9 +118,19 @@ public class BookingService {
             return paymentUrl;
         } catch (Exception ex) {
             log.error("Failed to create payment for order: {}", createPaymentRequest.orderId(), ex);
-            orderClient.cancelOrder(createPaymentRequest.orderId());
-            inventoryClient.releaseReservation(reservationId);
+            
             handleBookingFailure(booking);
+            
+            BookingFailedEvent event = new BookingFailedEvent(
+                UUID.randomUUID(),
+                booking.getId(),
+                createPaymentRequest.orderId(),
+                reservationId,
+                "Failed to create payment: " + ex.getMessage(),
+                Instant.now()
+            );
+            kafkaTemplate.send("booking.failed", booking.getId().toString(), event);
+            
             throw new ResponseStatusException(
                     HttpStatus.INTERNAL_SERVER_ERROR,
                     "Failed to create payment for order: " + createPaymentRequest.orderId()
@@ -139,11 +153,11 @@ public class BookingService {
         return bookingRepository.save(booking);
     }
 
-    private ReserveSeatsResponse reserveSeats(Booking booking) {
+    private ReserveSeatsResponse reserveSeats(Booking booking, List<Integer> seatNumbers) {
         try {
             ReserveSeatsResponse response = inventoryClient.reserveSeats(
                     booking.getTripId(),
-                    booking.getSeatsCount()
+                    seatNumbers
             );
             log.debug("Seats reserved: reservationId={}, expiresAt={}", 
                     response.getReservationId(), response.getExpiresAt());
@@ -171,8 +185,19 @@ public class BookingService {
             return response;
         } catch (Exception ex) {
             log.error("Failed to create order for booking: {}", booking.getId(), ex);
-            inventoryClient.releaseReservation(reservationId);
+            
             handleBookingFailure(booking);
+            
+            BookingFailedEvent event = new BookingFailedEvent(
+                UUID.randomUUID(),
+                booking.getId(),
+                null,
+                reservationId,
+                "Failed to create order: " + ex.getMessage(),
+                Instant.now()
+            );
+            kafkaTemplate.send("booking.failed", booking.getId().toString(), event);
+            
             throw new ResponseStatusException(
                     HttpStatus.INTERNAL_SERVER_ERROR,
                     "Failed to create order"
@@ -207,6 +232,17 @@ public class BookingService {
     public BookingResponse cancelBooking(UUID id) {
         Booking booking = bookingRepository.findById(id)
                 .orElseThrow(() -> new BookingNotFoundException("Booking not found with id: " + id));
+
+        UUID currentUserId = SecurityUtils.currentUserId();
+        boolean isOwner = booking.getUserId().equals(currentUserId);
+        boolean isAdmin = SecurityUtils.currentUserHasRole("ADMIN");
+        if (!isOwner && !isAdmin) {
+            log.warn("Cancel denied: bookingId={} belongs to user {}, current user {}", id, booking.getUserId(), currentUserId);
+            throw new ResponseStatusException(
+                    HttpStatus.FORBIDDEN,
+                    "You can only cancel your own booking"
+            );
+        }
         
         log.info("Cancelling booking: bookingId={}, orderId={}, reservationId={}", 
                 booking.getId(), booking.getOrderId(), booking.getReservationId());

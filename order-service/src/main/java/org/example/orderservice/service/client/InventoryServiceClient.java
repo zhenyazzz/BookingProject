@@ -5,7 +5,6 @@ import com.booking.inventory.grpc.ReserveSeatsRequest;
 import com.booking.inventory.grpc.ReserveSeatsResponse;
 import com.booking.inventory.grpc.ConfirmReservationRequest;
 import com.booking.inventory.grpc.ReleaseReservationRequest;
-import net.devh.boot.grpc.client.inject.GrpcClient;
 import org.springframework.stereotype.Service;
 import java.util.UUID;
 import java.util.List;
@@ -13,8 +12,11 @@ import java.util.List;
 @Service
 public class InventoryServiceClient {
 
-    @GrpcClient("inventory-service")
-    private InventoryServiceGrpc.InventoryServiceBlockingStub stub;
+    private final InventoryServiceGrpc.InventoryServiceBlockingStub stub;
+
+    public InventoryServiceClient(InventoryServiceGrpc.InventoryServiceBlockingStub inventoryServiceBlockingStub) {
+        this.stub = inventoryServiceBlockingStub;
+    }
 
     public ReserveSeatsResponse reserveSeats(UUID tripId, List<Integer> seats) {
         return stub.reserveSeats(

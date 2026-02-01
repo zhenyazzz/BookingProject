@@ -6,10 +6,18 @@ import org.example.tripservice.model.Trip;
 import org.example.tripservice.model.TripStatus;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.example.tripservice.config.SecurityConfig;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.autoconfigure.flyway.FlywayAutoConfiguration;
+import org.springframework.boot.autoconfigure.security.servlet.SecurityAutoConfiguration;
 import org.springframework.boot.test.autoconfigure.orm.jpa.DataJpaTest;
+import org.springframework.boot.test.autoconfigure.orm.jpa.TestEntityManager;
+import org.springframework.context.annotation.ComponentScan;
+import org.springframework.context.annotation.FilterType;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.transaction.annotation.Transactional;
+
+import jakarta.persistence.EntityManager;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
@@ -18,7 +26,8 @@ import java.util.UUID;
 
 import static org.junit.jupiter.api.Assertions.*;
 
-@DataJpaTest
+@DataJpaTest(excludeAutoConfiguration = {SecurityAutoConfiguration.class, FlywayAutoConfiguration.class})
+@ComponentScan(excludeFilters = @ComponentScan.Filter(type = FilterType.ASSIGNABLE_TYPE, classes = SecurityConfig.class))
 @ActiveProfiles("test")
 @Transactional
 class TripRepositoryTest {
@@ -29,10 +38,14 @@ class TripRepositoryTest {
     @Autowired
     private RouteRepository routeRepository;
 
+    @Autowired
+    private EntityManager entityManager;
+
     private Route route;
     private Trip scheduledTrip;
     private Trip inProgressTrip;
     private Trip futureTrip;
+    private LocalDateTime baseTime;
 
     @BeforeEach
     void setUp() {
@@ -44,13 +57,15 @@ class TripRepositoryTest {
         route.setToCity("Saint Petersburg");
         route = routeRepository.save(route);
 
-        LocalDateTime now = LocalDateTime.now();
-        LocalDateTime past = now.minusHours(2);
-        LocalDateTime future = now.plusHours(2);
+        baseTime = LocalDateTime.now();
+        LocalDateTime pastDeparture = baseTime.minusHours(3);
+        LocalDateTime pastArrival = baseTime.minusHours(1);
+        LocalDateTime futureDeparture = baseTime.plusHours(2);
+        LocalDateTime futureArrival = baseTime.plusHours(6);
 
-        scheduledTrip = createTrip(route, past, now.plusHours(4), TripStatus.SCHEDULED);
-        inProgressTrip = createTrip(route, past, now.plusHours(1), TripStatus.IN_PROGRESS);
-        futureTrip = createTrip(route, future, future.plusHours(4), TripStatus.SCHEDULED);
+        scheduledTrip = createTrip(route, pastDeparture, baseTime.plusHours(4), TripStatus.SCHEDULED);
+        inProgressTrip = createTrip(route, pastDeparture, pastArrival, TripStatus.IN_PROGRESS);
+        futureTrip = createTrip(route, futureDeparture, futureArrival, TripStatus.SCHEDULED);
     }
 
     private Trip createTrip(Route route, LocalDateTime departure, LocalDateTime arrival, TripStatus status) {
@@ -67,7 +82,7 @@ class TripRepositoryTest {
 
     @Test
     void findDepartingTripIds_ShouldReturnScheduledTripsWithPastDepartureTime() {
-        LocalDateTime now = LocalDateTime.now();
+        LocalDateTime now = baseTime;
 
         List<UUID> departingIds = tripRepository.findDepartingTripIds(now);
 
@@ -79,11 +94,14 @@ class TripRepositoryTest {
 
     @Test
     void markInProgress_ShouldUpdateScheduledTripsWithPastDepartureTime() {
-        LocalDateTime now = LocalDateTime.now();
+        LocalDateTime now = baseTime;
 
         int updated = tripRepository.markInProgress(now);
 
         assertEquals(1, updated);
+        
+        entityManager.flush();
+        entityManager.clear();
         
         Trip updatedTrip = tripRepository.findById(scheduledTrip.getId()).orElseThrow();
         assertEquals(TripStatus.IN_PROGRESS, updatedTrip.getStatus());
@@ -94,7 +112,7 @@ class TripRepositoryTest {
 
     @Test
     void findArrivingTripIds_ShouldReturnInProgressTripsWithPastArrivalTime() {
-        LocalDateTime now = LocalDateTime.now();
+        LocalDateTime now = baseTime;
 
         List<UUID> arrivingIds = tripRepository.findArrivingTripIds(now);
 
@@ -105,11 +123,14 @@ class TripRepositoryTest {
 
     @Test
     void markCompleted_ShouldUpdateInProgressTripsWithPastArrivalTime() {
-        LocalDateTime now = LocalDateTime.now();
+        LocalDateTime now = baseTime;
 
         int updated = tripRepository.markCompleted(now);
 
         assertEquals(1, updated);
+        
+        entityManager.flush();
+        entityManager.clear();
         
         Trip updatedTrip = tripRepository.findById(inProgressTrip.getId()).orElseThrow();
         assertEquals(TripStatus.COMPLETED, updatedTrip.getStatus());

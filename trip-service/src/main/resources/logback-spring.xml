@@ -12,6 +12,11 @@
         </encoder>
     </appender>
 
+    <logger name="org.example.tripservice.config.RequestLoggingFilter" level="INFO"/>
+    <logger name="org.example.tripservice.aspect.ControllerLoggingAspect" level="INFO"/>
+    <logger name="org.example.tripservice.controller" level="DEBUG"/>
+    <logger name="org.springframework.security" level="DEBUG"/>
+
     <root level="INFO">
         <appender-ref ref="STDOUT"/>
     </root>

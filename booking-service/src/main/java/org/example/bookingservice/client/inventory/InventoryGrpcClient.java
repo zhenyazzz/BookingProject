@@ -8,6 +8,7 @@ import com.booking.inventory.grpc.ReleaseReservationRequest;
 import org.springframework.stereotype.Component;
 import lombok.RequiredArgsConstructor;
 import java.util.UUID;
+import java.util.List;
 
 @Component
 @RequiredArgsConstructor
@@ -15,11 +16,11 @@ public class InventoryGrpcClient {
 
     private final InventoryServiceGrpc.InventoryServiceBlockingStub stub;
 
-    public ReserveSeatsResponse reserveSeats(UUID tripId, int seats) {
+    public ReserveSeatsResponse reserveSeats(UUID tripId, List<Integer> seats) {
         return stub.reserveSeats(
                 ReserveSeatsRequest.newBuilder()
                         .setTripId(tripId.toString())
-                        .setSeats(seats)
+                        .addAllSeatNumbers(seats)
                         .build()
         );
     }

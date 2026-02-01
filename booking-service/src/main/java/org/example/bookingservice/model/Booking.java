@@ -81,8 +81,5 @@ public class Booking {
         this.status = BookingStatus.CONFIRMED;
     }
 
-    public void expire() {
-        this.status = BookingStatus.EXPIRED;
-    }
 }
 

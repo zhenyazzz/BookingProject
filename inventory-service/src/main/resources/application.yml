@@ -16,9 +16,28 @@ spring:
   flyway:
     enabled: true
     baseline-on-migrate: true
+  security:
+    oauth2:
+      resourceserver:
+        jwt:
+          jwk-set-uri: ${KEYCLOAK_JWKS_URI:http://localhost:8091/realms/ticketing-security-realm/protocol/openid-connect/certs}
+          issuer-uri: ${KEYCLOAK_ISSUER_URI:http://localhost:8091/realms/ticketing-security-realm}
+  kafka:
+    bootstrap-servers: ${SPRING_KAFKA_BOOTSTRAP_SERVERS:localhost:9092}
+    producer:
+      key-serializer: org.apache.kafka.common.serialization.StringSerializer
+      value-serializer: org.springframework.kafka.support.serializer.JsonSerializer
+      properties:
+        spring.json.add.type.headers: true
+    consumer:
+      group-id: inventory-service
+      key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+      value-deserializer: org.springframework.kafka.support.serializer.JsonDeserializer
+      properties:
+        spring.json.trusted.packages: "*"
 
 server:
-  port: 8080
+  port: 8082
 
 springdoc:
   swagger-ui:
@@ -34,3 +53,7 @@ reservation:
   data-prefix: "reservation:data:"
   trigger-prefix: "reservation:trigger:"
   ttl-minutes: 15
+
+trip:
+  service:
+    url: ${TRIP_SERVICE_URL:http://localhost:8080}

@@ -35,4 +35,9 @@ public final class TripSpecifications {
         return (root, query, cb) ->
             cb.between(root.get("departureTime"), start, end);
     }
+
+    public static Specification<Trip> withDepartureNotInPast() {
+        return (root, query, cb) ->
+            cb.greaterThanOrEqualTo(root.get("departureTime"), LocalDateTime.now());
+    }
 }

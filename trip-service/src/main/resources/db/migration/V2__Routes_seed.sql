@@ -44,7 +44,8 @@ INSERT INTO trips (
     arrival_time,
     price,
     total_seats,
-    status
+    status,
+    bus_type
 )
 SELECT
     gen_random_uuid(),
@@ -53,16 +54,17 @@ SELECT
     (CURRENT_DATE + day_offset) + time_offset + INTERVAL '3 hours',
     price,
     50,
-    'SCHEDULED'
+    'SCHEDULED',
+    'MINIBUS'
 FROM routes r
 CROSS JOIN (
     SELECT
-        generate_series(0, 6) AS day_offset,
+        generate_series(1, 14) AS day_offset,
         TIME '08:00' AS time_offset,
         25.00 AS price
     UNION ALL
     SELECT
-        generate_series(0, 6),
+        generate_series(1, 14),
         TIME '18:00',
         27.00
 ) s;

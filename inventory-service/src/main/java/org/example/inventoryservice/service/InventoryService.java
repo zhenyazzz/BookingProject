@@ -21,12 +21,17 @@ import java.util.concurrent.TimeUnit;
 import org.example.kafka.event.ReservationExpiredEvent;
 import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.dao.DataIntegrityViolationException;
+
 import java.time.Instant;
 import java.time.LocalDateTime;
 
 import org.example.inventoryservice.exception.NotEnoughSeatsException;
 
 import org.example.inventoryservice.dto.response.SeatResponse;
+import org.example.inventoryservice.client.TripServiceClient;
+import org.example.inventoryservice.client.TripResponse;
+import org.example.kafka.event.BusType;
 import java.util.stream.Collectors;
 
 @Slf4j
@@ -36,6 +41,7 @@ public class InventoryService {
     private final SeatRepository seatRepository;
     private final RedisTemplate<String, Object> redisTemplate;
     private final KafkaTemplate<String, Object> kafkaTemplate;
+    private final TripServiceClient tripServiceClient;
 
     @Value("${reservation.data-prefix}")
     private String dataPrefix;
@@ -48,9 +54,41 @@ public class InventoryService {
 
     public List<SeatResponse> getSeatsByTripId(UUID tripId) {
         log.info("Fetching all seats for tripId: {}", tripId);
+        
+        if (!seatRepository.existsByTripId(tripId)) {
+            log.info("No seats found for tripId: {}, creating them...", tripId);
+            createSeatsForTrip(tripId);
+        }
+        
         return seatRepository.findByTripId(tripId).stream()
                 .map(seat -> new SeatResponse(seat.getId(), seat.getSeatNumber(), seat.getStatus()))
                 .collect(Collectors.toList());
+    }
+    
+    @Transactional
+    private void createSeatsForTrip(UUID tripId) {
+        try {
+            TripResponse tripResponse = tripServiceClient.getTripById(tripId);
+            BusType busType = tripResponse.getBusType();
+            int capacity = busType != null ? busType.getCapacity() : 50; 
+            
+            List<Seat> seats = new ArrayList<>(capacity);
+            for (int i = 1; i <= capacity; i++) {
+                Seat seat = new Seat();
+                seat.setTripId(tripId);
+                seat.setSeatNumber(i);
+                seat.setStatus(SeatStatus.AVAILABLE);
+                seats.add(seat);
+            }
+            
+            seatRepository.saveAll(seats);
+            log.info("Created {} seats for tripId: {}", capacity, tripId);
+        } catch (DataIntegrityViolationException e) {
+            log.warn("Seats already exist for tripId: {} (race condition)", tripId);
+        } catch (Exception e) {
+            log.error("Failed to create seats for tripId: {}", tripId, e);
+            throw new RuntimeException("Failed to create seats for trip: " + tripId, e);
+        }
     }
 
     @Transactional
@@ -184,8 +222,12 @@ public class InventoryService {
             seats.add(seat);
         }
 
-        seatRepository.saveAll(seats);
-        log.info("Seats created for tripId: {}", tripId);
+        try {
+            seatRepository.saveAll(seats);
+            log.info("Seats created for tripId: {}", tripId);
+        } catch (DataIntegrityViolationException e) {
+            log.warn("Seats already exist for tripId: {}", tripId);
+        }
     }
 
     @Transactional

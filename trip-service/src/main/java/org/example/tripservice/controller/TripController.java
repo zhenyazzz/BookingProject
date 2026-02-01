@@ -23,13 +23,11 @@ import java.util.UUID;
 import org.example.tripservice.controller.docs.TripControllerDocs;
 import jakarta.validation.Valid;
 import org.springframework.web.bind.annotation.RequestParam;
-import io.micrometer.observation.annotation.Observed;
 import java.time.LocalDate;
 
 @RestController
 @RequestMapping("/trips")
 @RequiredArgsConstructor
-@Observed(name = "trip.controller")
 public class TripController implements TripControllerDocs {
     private final TripService tripService;
 

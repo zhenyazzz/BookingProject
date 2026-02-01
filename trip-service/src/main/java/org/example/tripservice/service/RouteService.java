@@ -14,8 +14,11 @@ import org.example.tripservice.exception.RouteNotFoundException;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import java.util.UUID;
+import java.util.List;
+import java.util.stream.Collectors;
 import jakarta.transaction.Transactional;
 import io.micrometer.observation.annotation.Observed;
+import org.example.tripservice.dto.response.CityResponse;
 
 @Service
 @RequiredArgsConstructor
@@ -74,6 +77,40 @@ public class RouteService {
             .orElseThrow(() -> new RouteNotFoundException("Route not found with id: " + id));
         routeRepository.delete(route);
         log.info("Route deleted: {} -> {}", route.getFromCity(), route.getToCity());
+    }
+
+    public List<CityResponse> getAllCities() {
+        log.info("Fetching all distinct cities with scheduled trips");
+        List<String> cityNames = routeRepository.findAllDistinctCitiesWithScheduledTrips();
+        return cityNames.stream()
+            .map(cityName -> {
+                // Преобразуем русское название в английское для совместимости
+                String englishName = convertToEnglishName(cityName);
+                return new CityResponse(englishName, cityName);
+            })
+            .collect(Collectors.toList());
+    }
+
+    private String convertToEnglishName(String russianName) {
+        // Маппинг русских названий на английские
+        return switch (russianName) {
+            case "Минск" -> "Minsk";
+            case "Брест" -> "Brest";
+            case "Гродно" -> "Grodno";
+            case "Гомель" -> "Gomel";
+            case "Витебск" -> "Vitebsk";
+            case "Могилев" -> "Mogilev";
+            case "Барановичи" -> "Baranovichi";
+            case "Бобруйск" -> "Bobruisk";
+            case "Пинск" -> "Pinsk";
+            case "Орша" -> "Orsha";
+            case "Полоцк" -> "Polotsk";
+            case "Новополоцк" -> "Novopolotsk";
+            case "Солигорск" -> "Soligorsk";
+            case "Лида" -> "Lida";
+            case "Молодечно" -> "Molodechno";
+            default -> russianName.toLowerCase().replace(" ", "-");
+        };
     }
 
 }

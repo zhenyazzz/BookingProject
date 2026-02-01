@@ -8,3 +8,4 @@ CREATE TABLE seats (
 
 CREATE INDEX idx_seat_trip ON seats(trip_id);
 CREATE INDEX idx_seat_status ON seats(status);
+CREATE UNIQUE INDEX idx_seats_trip_seat ON seats (trip_id, seat_number);

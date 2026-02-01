@@ -100,12 +100,8 @@ public class OrderService {
         orderRepository.save(order);
 
         if (order.getReservationId() != null) {
-            try {
-                inventoryServiceClient.confirmReservation(order.getReservationId());
-                log.debug("Reservation confirmed: reservationId={}", order.getReservationId());
-            } catch (Exception ex) {
-                log.error("Failed to confirm reservation: {}", order.getReservationId(), ex);
-            }
+            inventoryServiceClient.confirmReservation(order.getReservationId());
+            log.debug("Reservation confirmed: reservationId={}", order.getReservationId());
         }
 
         publishOrderConfirmedEvent(order);

@@ -1,125 +1,128 @@
+server:
+  port: 8080
+
 spring:
+  main:
+    web-application-type: reactive
   application:
     name: api-gateway
-
   cloud:
     gateway:
       server:
-        webmvc:
+        webflux:
           routes:
-            - id: trip-service
-              uri: ${TRIP_SERVICE_URL:http://trip-service:8086}
+            - id: routes-service
+              uri: ${TRIP_SERVICE_URL:http://localhost:8085}
               predicates:
-                - Path=/routes/**, /trips/**
+                - Path=/routes/**
               filters:
                 - name: CircuitBreaker
                   args:
-                    name: tripServiceCircuitBreaker
-                    fallbackUri: forward:/fallback/trip
-            - id: trip-service-api-docs
-              uri: ${TRIP_SERVICE_URL:http://trip-service:8086}
+                    name: routes-service
+                    fallbackUri: forward:/fallback
+            - id: trips-service
+              uri: ${TRIP_SERVICE_URL:http://localhost:8085}
               predicates:
-                - Path=/docs/tripservice/v3/api-docs
-              filters:
-                - SetPath=/v3/api-docs
-
-            - id: inventory-service-events
-              uri: ${INVENTORY_SERVICE_URL:http://inventory-service:8080}
-              predicates:
-                - Path=/api/v1/events, /api/v1/venues
+                - Path=/trips/**
               filters:
                 - name: CircuitBreaker
                   args:
-                    name: inventoryServiceCircuitBreaker
-                    fallbackUri: forward:/fallback/inventory
-            - id: inventory-service-path-vars
-              uri: ${INVENTORY_SERVICE_URL:http://inventory-service:8080}
+                    name: trips-service
+                    fallbackUri: forward:/fallback
+            - id: inventory-service
+              uri: ${INVENTORY_SERVICE_URL:http://localhost:8082}
               predicates:
-                - Path=/api/v1/venue/{venueId}, /api/v1/event/{eventId}
+                - Path=/inventory/**
               filters:
                 - name: CircuitBreaker
                   args:
-                    name: inventoryServiceCircuitBreaker
-                    fallbackUri: forward:/fallback/inventory
-            - id: inventory-service-api-docs
-              uri: ${INVENTORY_SERVICE_URL:http://inventory-service:8080}
-              predicates:
-                - Path=/docs/inventoryservice/v3/api-docs
-              filters:
-                - SetPath=/v3/api-docs
-
+                    name: inventory-service
+                    fallbackUri: forward:/fallback
             - id: payment-service
-              uri: ${PAYMENT_SERVICE_URL:http://payment-service:8085}
+              uri: ${PAYMENT_SERVICE_URL:http://localhost:8084}
               predicates:
-                - Path=/api/v1/payments/create-payment-intent/{orderId},/api/v1/payments/status/{orderId},/api/v1/payments/stripe
+                - Path=/payments/**
               filters:
                 - name: CircuitBreaker
                   args:
-                    name: paymentServiceCircuitBreaker
-                    fallbackUri: forward:/fallback/payment
-            - id: payment-service-api-docs
-              uri: ${PAYMENT_SERVICE_URL:http://payment-service:8085}
-              predicates:
-                - Path=/docs/paymentservice/v3/api-docs
-              filters:
-                - SetPath=/v3/api-docs
-
+                    name: payment-service
+                    fallbackUri: forward:/fallback
             - id: booking-service
-              uri: ${BOOKING_SERVICE_URL:http://booking-service:8081}
+              uri: ${BOOKING_SERVICE_URL:http://localhost:8081}
               predicates:
-                - Path=/api/v1/booking
-                - Method=POST
+                - Path=/booking,/booking/**
               filters:
                 - name: CircuitBreaker
                   args:
-                    name: bookingServiceCircuitBreaker
-                    fallbackUri: forward:/fallback/booking
-            - id: booking-service-api-docs
-              uri: ${BOOKING_SERVICE_URL:http://booking-service:8081}
+                    name: booking-service
+                    fallbackUri: forward:/fallback
+            - id: order-service
+              uri: ${ORDER_SERVICE_URL:http://localhost:8083}
               predicates:
-                - Path=/docs/bookingservice/v3/api-docs
+                - Path=/orders/**
               filters:
-                - SetPath=/v3/api-docs
+                - name: CircuitBreaker
+                  args:
+                    name: order-service
+                    fallbackUri: forward:/fallback
+            - id: user-service-me
+              uri: ${USER_SERVICE_URL:http://localhost:8086}
+              predicates:
+                - Path=/users/me/**
+              filters:
+                - name: CircuitBreaker
+                  args:
+                    name: user-service-me
+                    fallbackUri: forward:/fallback
+            - id: user-service-admin
+              uri: ${USER_SERVICE_URL:http://localhost:8086}
+              predicates:
+                - Path=/admin/users/**
+              filters:
+                - name: CircuitBreaker
+                  args:
+                    name: user-service-admin
+                    fallbackUri: forward:/fallback
 
   security:
     oauth2:
       resourceserver:
         jwt:
-          issuer-uri: ${KEYCLOAK_ISSUER_URI:http://keycloak:8080/realms/ticketing-security-realm}
-  
-  mvc:
-    cors:
-      mappings:
-        '[/**]':
-          allowed-origins: ${ALLOWED_ORIGINS:http://localhost:8086}
-          allowed-methods: "GET,POST,PUT,DELETE,OPTIONS"
-          allow-credentials: true
-
-server:
-  port: 8090
+          issuer-uri: ${KEYCLOAK_ISSUER_URI:http://localhost:8091/realms/ticketing-security-realm}
+          jwk-set-uri: ${KEYCLOAK_JWKS_URI:http://localhost:8091/realms/ticketing-security-realm/protocol/openid-connect/certs}
 
 keycloak:
   auth:
-    jwk-set-uri: ${KEYCLOAK_JWKS_URI:http://keycloak:8080/realms/ticketing-security-realm/protocol/openid-connect/certs}
+    jwk-set-uri: ${KEYCLOAK_JWKS_URI:http://localhost:8091/realms/ticketing-security-realm/protocol/openid-connect/certs}
 
 springdoc:
   swagger-ui:
     path: /swagger-ui.html
     urls:
+      - name: Trip Service
+        url: /docs/tripservice/v3/api-docs
       - name: Inventory Service
         url: /docs/inventoryservice/v3/api-docs
       - name: Booking Service
         url: /docs/bookingservice/v3/api-docs
+      - name: Order Service
+        url: /docs/orderservice/v3/api-docs
       - name: Payment Service
         url: /docs/paymentservice/v3/api-docs
-      - name: Trip Service
-        url: /docs/tripservice/v3/api-docs
+      - name: User Service
+        url: /docs/userservice/v3/api-docs
   api-docs:
     path: /v3/api-docs
 
 security:
   excluded:
-    urls: /swagger-ui.html, /swagger-ui/**, /docs/**, /v3/api-docs/**, /swagger-resources/**, /api-docs/**
+    urls: /swagger-ui.html, /swagger-ui/**, /docs/**, /v3/api-docs/**, /swagger-resources/**, /api-docs/**, /routes/**, /trips/**, /actuator/**
+
+logging:
+  level:
+    root: INFO
+    org.example.apigateway: INFO
+    org.springframework.cloud.gateway: INFO
 
 management:
   tracing:
@@ -132,9 +135,16 @@ management:
     web:
       exposure:
         include: "*"
+      base-path: /actuator
   endpoint:
+    gateway:
+      access: read_only
     health:
       show-details: always
+  prometheus:
+    metrics:
+      export:
+        enabled: true
 
 resilience4j:
   circuitbreaker:

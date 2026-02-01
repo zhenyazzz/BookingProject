@@ -15,14 +15,19 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.stereotype.Service;
 import org.example.paymentservice.dto.CreatePaymentRequest;
+import org.example.paymentservice.dto.PaymentListItemResponse;
+import org.example.paymentservice.dto.PaymentStatusResponse;
+
 import com.stripe.param.checkout.SessionCreateParams;
 import org.example.kafka.event.PaymentSucceededEvent;
 import org.example.kafka.event.PaymentFailedEvent;
 
 import java.time.LocalDateTime;
 import java.time.Instant;
+import java.util.List;
 import java.util.UUID;
 import java.math.BigDecimal;
+import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
@@ -31,48 +36,70 @@ public class PaymentService {
     @Value("${stripe.webhook-secret}")
     private String webhookSecret;
 
+    @Value("${payment.success-url}")
+    private String successUrl;
+
+    @Value("${payment.cancel-url}")
+    private String cancelUrl;
+
     private final PaymentRepository paymentRepository;
     private final KafkaTemplate<String, Object> kafkaTemplate;
 
+
     @Transactional
     public String createPayment(CreatePaymentRequest request) throws StripeException {
-        SessionCreateParams params = SessionCreateParams.builder()
-                .addPaymentMethodType(com.stripe.param.checkout.SessionCreateParams.PaymentMethodType.CARD)
-                .setMode(SessionCreateParams.Mode.PAYMENT)
-                .setSuccessUrl("http://localhost:8080/payment/success?orderId=" + request.orderId())
-                .setCancelUrl("http://localhost:8080/payment/cancel?orderId=" + request.orderId())
-                .addLineItem(
-                        SessionCreateParams.LineItem.builder()
-                                .setQuantity(1L)
-                                .setPriceData(
-                                        SessionCreateParams.LineItem.PriceData.builder()
-                                                .setCurrency(request.currency() != null ? request.currency() : "usd")
-                                                .setUnitAmount(request.amount().multiply(BigDecimal.valueOf(100)).longValue())
-                                                .setProductData(
-                                                        SessionCreateParams.LineItem.PriceData.ProductData.builder()
-                                                                .setName(request.description() != null ? request.description() : "Order #" + request.orderId())
-                                                                .build()
-                                                )
-                                                .build()
-                                )
-                                .build()
-                )
-                .putMetadata("orderId", request.orderId().toString())
-                .build();
-
-        Session session = Session.create(params);
-
         Payment payment = new Payment();
         payment.setOrderId(request.orderId());
-        payment.setPaymentIntentId(session.getPaymentIntent());
         payment.setAmount(request.amount());
         payment.setCurrency(request.currency() != null ? request.currency().toUpperCase() : "USD");
         payment.setStatus(PaymentStatus.PENDING);
         payment.setCreatedAt(LocalDateTime.now());
-        paymentRepository.save(payment);
+        
+        payment = paymentRepository.save(payment);
+        
+        try {
+            SessionCreateParams params = SessionCreateParams.builder()
+                    .addPaymentMethodType(com.stripe.param.checkout.SessionCreateParams.PaymentMethodType.CARD)
+                    .setMode(SessionCreateParams.Mode.PAYMENT)
+                    .setSuccessUrl(successUrl + "?orderId=" + request.orderId())
+                    .setCancelUrl(cancelUrl + "?orderId=" + request.orderId())
+                    .addLineItem(
+                            SessionCreateParams.LineItem.builder()
+                                    .setQuantity(1L)
+                                    .setPriceData(
+                                            SessionCreateParams.LineItem.PriceData.builder()
+                                                    .setCurrency(request.currency() != null ? request.currency() : "usd")
+                                                    .setUnitAmount(request.amount().multiply(BigDecimal.valueOf(100)).longValue())
+                                                    .setProductData(
+                                                            SessionCreateParams.LineItem.PriceData.ProductData.builder()
+                                                                    .setName(request.description() != null ? request.description() : "Order #" + request.orderId())
+                                                                    .build()
+                                                    )
+                                                    .build()
+                                    )
+                                    .build()
+                    )
+                    .putMetadata("orderId", request.orderId().toString())
+                    .setPaymentIntentData(
+                        SessionCreateParams.PaymentIntentData.builder()
+                            .putMetadata("orderId", request.orderId().toString())
+                            .build()
+                    )                    
+                    .build();
 
-        log.info("Payment session created for order {}", request.orderId());
-        return session.getUrl();
+            Session session = Session.create(params);
+            
+            payment.setPaymentIntentId(session.getPaymentIntent());
+            
+            
+            log.info("Payment session created for order {}", request.orderId());
+            return session.getUrl();
+            
+        } catch (Exception e) {
+            payment.setStatus(PaymentStatus.FAILED);
+            paymentRepository.save(payment);
+            throw e;
+        }
     }
 
     @Transactional
@@ -182,5 +209,27 @@ public class PaymentService {
         log.info("Payment failed for order {}", payment.getOrderId());
     }
 
+    public PaymentStatusResponse getPaymentByOrderId(UUID orderId) {
+        Payment payment = paymentRepository.findByOrderId(orderId)
+                .orElseThrow(() -> new RuntimeException("Payment not found for order " + orderId));
+        return new PaymentStatusResponse(payment.getId(), payment.getStatus());
+    }
+
+    public List<PaymentListItemResponse> getPaymentsByOrderIds(List<UUID> orderIds) {
+        if (orderIds == null || orderIds.isEmpty()) {
+            return List.of();
+        }
+        return paymentRepository.findByOrderIdIn(orderIds).stream()
+                .map(p -> new PaymentListItemResponse(
+                        p.getId(),
+                        p.getOrderId(),
+                        p.getAmount(),
+                        p.getCurrency(),
+                        p.getStatus(),
+                        p.getCreatedAt(),
+                        p.getPaidAt()
+                ))
+                .collect(Collectors.toList());
+    }
 }
 

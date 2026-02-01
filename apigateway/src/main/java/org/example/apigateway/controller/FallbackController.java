@@ -32,6 +32,16 @@ public class FallbackController {
         return createFallbackResponse("payment-service", "Payment system is temporary offline");
     }
 
+    @RequestMapping("/order")
+    public ResponseEntity<Map<String, Object>> orderFallback() {
+        return createFallbackResponse("order-service", "Order Service is temporarily unavailable");
+    }
+
+    @RequestMapping("/user")
+    public ResponseEntity<Map<String, Object>> userFallback() {
+        return createFallbackResponse("user-service", "User Service is temporarily unavailable");
+    }
+
     private ResponseEntity<Map<String, Object>> createFallbackResponse(String serviceName, String message) {
         return ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE)
                 .body(Map.of(

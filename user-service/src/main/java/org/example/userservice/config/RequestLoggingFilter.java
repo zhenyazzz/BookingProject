@@ -6,20 +6,29 @@ import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.core.Ordered;
+import org.springframework.core.annotation.Order;
 import org.springframework.stereotype.Component;
 import org.springframework.web.filter.OncePerRequestFilter;
 
 import java.io.IOException;
 
 @Component
+@Order(Ordered.HIGHEST_PRECEDENCE)
 public class RequestLoggingFilter extends OncePerRequestFilter {
 
-    private static final Logger logger = LoggerFactory.getLogger(RequestLoggingFilter.class);
+    private static final Logger log = LoggerFactory.getLogger(RequestLoggingFilter.class);
 
     @Override
     protected void doFilterInternal(HttpServletRequest request, HttpServletResponse response, FilterChain filterChain) throws ServletException, IOException {
-        logger.info("User Service Incoming Request: {} {}", request.getMethod(), request.getRequestURI());
-        System.out.println("User service request: " + request.getMethod() + " " + request.getRequestURI());
+        String method = request.getMethod();
+        String uri = request.getRequestURI();
+        boolean hasAuth = request.getHeader("Authorization") != null && !request.getHeader("Authorization").isBlank();
+
+        log.info("[REQ] {} {} | Authorization: {}", method, uri, hasAuth ? "present" : "MISSING");
+
         filterChain.doFilter(request, response);
+
+        log.info("[RES] {} {} -> {} {}", method, uri, response.getStatus(), response.getStatus() == 401 ? "(UNAUTHORIZED)" : "");
     }
 }

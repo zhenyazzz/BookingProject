@@ -16,7 +16,7 @@ public class OrderClient {
 
     public OrderResponse createOrder(CreateOrderRequest request) {
         return webClient.post()
-                .uri("/api/v1/orders")
+                .uri("/orders")
                 .bodyValue(request)
                 .retrieve()
                 .bodyToMono(OrderResponse.class)
@@ -25,7 +25,7 @@ public class OrderClient {
 
     public void cancelOrder(UUID orderId) {
         webClient.put()
-                .uri("/api/v1/orders/{id}/cancel", orderId)
+                .uri("/orders/{id}/cancel", orderId)
                 .retrieve()
                 .toBodilessEntity()
                 .block();
@@ -33,7 +33,7 @@ public class OrderClient {
 
     public void confirmOrder(UUID orderId) {
         webClient.put()
-                .uri("/api/v1/orders/{id}/confirm", orderId)
+                .uri("/orders/{id}/confirm", orderId)
                 .retrieve()
                 .toBodilessEntity()
                 .block();

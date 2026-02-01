@@ -20,7 +20,7 @@ jobs:
           java-version: 21
           cache: maven
 
-      - name: Build & test all modules
+      - name: Build and test (multi-module reactor)
         run: |
           chmod +x mvnw
-          ./mvnw clean verify
+          ./mvnw clean verify -B

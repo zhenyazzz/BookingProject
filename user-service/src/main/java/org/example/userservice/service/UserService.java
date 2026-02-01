@@ -3,25 +3,21 @@ package org.example.userservice.service;
 import jakarta.transaction.Transactional;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.example.userservice.dto.request.CreateUserRequest;
 import org.example.userservice.dto.request.UpdateUserRequest;
 import org.example.userservice.dto.response.ProfileResponse;
 import org.example.userservice.dto.response.UserResponse;
-import org.example.userservice.exception.UserAlreadyExistsException;
 import org.example.userservice.exception.UserNotFoundException;
 import org.example.userservice.mapper.UserMapper;
 import org.example.userservice.model.User;
 import org.example.userservice.repository.UserRepository;
+import org.example.userservice.util.SecurityUtils;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 
-import java.util.List;
-import java.util.Set;
 import java.util.UUID;
-import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
@@ -32,23 +28,29 @@ public class UserService {
     private final UserMapper userMapper;
 
     @Transactional
-    public UserResponse getMyProfile(UUID userId) {
+    public ProfileResponse getMyProfile(UUID userId) {
         log.info("Fetching profile for user {}", userId);
 
         User user = userRepository.findById(userId)
                 .orElseGet(() -> createProfile(userId));
 
-        return userMapper.toUserResponse(user);
+        String tokenPhone = SecurityUtils.currentUserPhoneNumber();
+        if (user.getPhoneNumber() == null && tokenPhone != null) {
+            user.setPhoneNumber(tokenPhone);
+            userRepository.save(user);
+        }
+
+        return userMapper.toProfileResponse(user);
     }
 
     @Transactional
-    public UserResponse updateMyProfile(UUID userId, UpdateUserRequest request) {
+    public ProfileResponse updateMyProfile(UUID userId, UpdateUserRequest request) {
         User user = findExistingUser(userId);
 
         log.info("Updating profile for user {}", userId);
         userMapper.updateUserFromRequest(request, user);
 
-        return userMapper.toUserResponse(user);
+        return userMapper.toProfileResponse(user);
     }
 
     @Transactional
@@ -59,7 +61,7 @@ public class UserService {
         userRepository.delete(user);
     }
 
-    @Transactional(readOnly = true)
+    @Transactional
     public Page<UserResponse> getUsersWithPagination(int page, int size, String sort) {
         Pageable pageable = PageRequest.of(page, size, parseSort(sort));
 
@@ -68,7 +70,7 @@ public class UserService {
                 .map(userMapper::toUserResponse);
     }
 
-    @Transactional(readOnly = true)
+    @Transactional
     public UserResponse getUserById(UUID userId) {
         log.info("Admin requested user profile {}", userId);
         return userMapper.toUserResponse(findExistingUser(userId));
@@ -88,12 +90,21 @@ public class UserService {
                         new UserNotFoundException("User profile not found with id: " + userId));
     }
 
+    @Transactional
     private User createProfile(UUID userId) {
         log.info("Creating profile for user {}", userId);
 
         User user = new User();
         user.setId(userId);
         user.setEmail(SecurityUtils.currentUserEmail());
+        
+        String firstName = SecurityUtils.currentUserFirstName();
+        String lastName = SecurityUtils.currentUserLastName();
+        String phoneNumber = SecurityUtils.currentUserPhoneNumber();
+        
+        if (firstName != null) user.setFirstName(firstName);
+        if (lastName != null) user.setLastName(lastName);
+        if (phoneNumber != null) user.setPhoneNumber(phoneNumber);
 
         return userRepository.save(user);
     }

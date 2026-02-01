@@ -15,7 +15,7 @@ public class PaymentClient {
 
     public CreatePaymentResponse createPayment(CreatePaymentRequest createPaymentRequest) {
         return webClient.post()
-                .uri("/api/v1/payments")
+                .uri("/payments")
                 .bodyValue(createPaymentRequest)
                 .retrieve()
                 .bodyToMono(CreatePaymentResponse.class)

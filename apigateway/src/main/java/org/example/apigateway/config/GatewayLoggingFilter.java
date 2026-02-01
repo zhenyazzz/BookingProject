@@ -1,62 +1,34 @@
 package org.example.apigateway.config;
 
-import java.io.IOException;
-import jakarta.servlet.*;
-import jakarta.servlet.http.HttpServletRequest;
-import jakarta.servlet.http.HttpServletResponse;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.security.core.Authentication;
-import org.springframework.security.core.context.SecurityContextHolder;
-import org.springframework.security.oauth2.jwt.Jwt;
+import org.springframework.cloud.gateway.filter.GatewayFilterChain;
+import org.springframework.cloud.gateway.filter.GlobalFilter;
+import org.springframework.core.Ordered;
+import org.springframework.http.HttpHeaders;
 import org.springframework.stereotype.Component;
+import org.springframework.web.server.ServerWebExchange;
+import reactor.core.publisher.Mono;
 
 @Component
 @Slf4j
-public class GatewayLoggingFilter implements Filter {
+public class GatewayLoggingFilter implements GlobalFilter, Ordered {
 
     @Override
-    public void doFilter(
-            ServletRequest request,
-            ServletResponse response,
-            FilterChain chain
-    ) throws IOException, ServletException {
+    public Mono<Void> filter(ServerWebExchange exchange, GatewayFilterChain chain) {
+        String method = exchange.getRequest().getMethod().name();
+        String path = exchange.getRequest().getURI().getPath();
+        boolean hasAuth = exchange.getRequest().getHeaders().getFirst(HttpHeaders.AUTHORIZATION) != null;
 
-        HttpServletRequest req = (HttpServletRequest) request;
-        HttpServletResponse res = (HttpServletResponse) response;
+        log.info("[GATEWAY REQ] {} {} | Authorization: {}", method, path, hasAuth ? "present" : "MISSING");
 
-        long start = System.currentTimeMillis();
-
-        String path = req.getRequestURI();
-        String method = req.getMethod();
-        String userId = resolveUser();
-
-        try {
-            chain.doFilter(request, response);
-        } finally {
-            long duration = System.currentTimeMillis() - start;
-
-            log.info(
-                "GATEWAY {} {} user={} status={} duration={}ms",
-                method,
-                path,
-                userId,
-                res.getStatus(),
-                duration
-            );
-        }
+        return chain.filter(exchange).doFinally(signal -> {
+            var status = exchange.getResponse().getStatusCode();
+            log.info("[GATEWAY RES] {} {} -> {}", method, path, status != null ? status.value() : "?");
+        });
     }
 
-    private String resolveUser() {
-        Authentication auth = SecurityContextHolder.getContext().getAuthentication();
-        if (auth == null || !auth.isAuthenticated()) {
-            return "anonymous";
-        }
-
-        if (auth.getPrincipal() instanceof Jwt jwt) {
-            return jwt.getSubject();
-        }
-
-        return auth.getName();
+    @Override
+    public int getOrder() {
+        return Ordered.HIGHEST_PRECEDENCE;
     }
 }
-

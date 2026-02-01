@@ -21,6 +21,7 @@ public class TripStatusScheduler {
     private final KafkaTemplate<String, Object> kafkaTemplate;
 
     @Scheduled(fixedRate = 60000) 
+    @Transactional
     public void updateTrips() {
         LocalDateTime now = LocalDateTime.now();
 
@@ -28,7 +29,6 @@ public class TripStatusScheduler {
         handleArrivals(now);
     }
 
-    @Transactional
     public void handleDepartures(LocalDateTime now) {
         List<UUID> ids = tripRepository.findDepartingTripIds(now);
 
@@ -41,7 +41,6 @@ public class TripStatusScheduler {
         }
     }
 
-    @Transactional
     public void handleArrivals(LocalDateTime now) {
 
         List<UUID> ids = tripRepository.findArrivingTripIds(now);
