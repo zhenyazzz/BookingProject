@@ -83,34 +83,7 @@ public class RouteService {
         log.info("Fetching all distinct cities with scheduled trips");
         List<String> cityNames = routeRepository.findAllDistinctCitiesWithScheduledTrips();
         return cityNames.stream()
-            .map(cityName -> {
-                // Преобразуем русское название в английское для совместимости
-                String englishName = convertToEnglishName(cityName);
-                return new CityResponse(englishName, cityName);
-            })
+            .map(cityName -> new CityResponse(cityName, cityName))
             .collect(Collectors.toList());
     }
-
-    private String convertToEnglishName(String russianName) {
-        // Маппинг русских названий на английские
-        return switch (russianName) {
-            case "Минск" -> "Minsk";
-            case "Брест" -> "Brest";
-            case "Гродно" -> "Grodno";
-            case "Гомель" -> "Gomel";
-            case "Витебск" -> "Vitebsk";
-            case "Могилев" -> "Mogilev";
-            case "Барановичи" -> "Baranovichi";
-            case "Бобруйск" -> "Bobruisk";
-            case "Пинск" -> "Pinsk";
-            case "Орша" -> "Orsha";
-            case "Полоцк" -> "Polotsk";
-            case "Новополоцк" -> "Novopolotsk";
-            case "Солигорск" -> "Soligorsk";
-            case "Лида" -> "Lida";
-            case "Молодечно" -> "Molodechno";
-            default -> russianName.toLowerCase().replace(" ", "-");
-        };
-    }
-
 }

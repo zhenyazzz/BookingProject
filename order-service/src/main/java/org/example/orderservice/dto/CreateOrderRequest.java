@@ -6,10 +6,8 @@ import jakarta.validation.constraints.NotNull;
 import java.math.BigDecimal;
 import java.util.UUID;
 
+
 public record CreateOrderRequest(
-    @NotNull(message = "User ID is required")
-    UUID userId,
-    
     @NotNull(message = "Trip ID is required")
     UUID tripId,
     

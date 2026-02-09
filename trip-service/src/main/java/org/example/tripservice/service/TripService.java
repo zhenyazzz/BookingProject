@@ -4,6 +4,7 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 
 import org.example.kafka.event.TripCreatedEvent;
+import org.example.kafka.event.EventType;
 import org.example.kafka.event.TripCancelledEvent;
 import org.example.tripservice.dto.request.TripCreateRequest;
 import org.example.tripservice.dto.request.TripUpdateRequest;
@@ -26,7 +27,6 @@ import org.springframework.cache.annotation.CacheEvict;
 import org.springframework.cache.annotation.CachePut;
 import org.springframework.cache.annotation.Cacheable;
 import io.micrometer.observation.annotation.Observed;
-import org.springframework.kafka.core.KafkaTemplate;
 
 import java.time.LocalDate;
 import java.util.UUID;
@@ -40,7 +40,7 @@ public class TripService {
     private final TripRepository tripRepository;
     private final RouteRepository routeRepository;
     private final TripMapper tripMapper;
-    private final KafkaTemplate<String, Object> kafkaTemplate;
+    private final OutboxService outboxService;
 
     @Transactional
     @CacheEvict(value = "trip-pages", allEntries = true)
@@ -60,8 +60,7 @@ public class TripService {
                 savedTrip.getId(), route.getFromCity(), route.getToCity(), savedTrip.getDepartureTime());
         
         TripCreatedEvent event = tripMapper.toCreatedEvent(savedTrip);
-
-        kafkaTemplate.send("trip.created", event.tripId().toString(), event);
+        outboxService.saveEvent(savedTrip.getId(), EventType.TRIP_CREATED, event);
 
         return tripMapper.toResponse(savedTrip);
     }
@@ -74,6 +73,10 @@ public class TripService {
                 .orElseThrow(() -> new TripNotFoundException("Trip not found with id: " + id));
     }
 
+    @Cacheable(
+        cacheNames = "trip-pages",
+        key = "#fromCity + ':' + #toCity + ':' + #date + ':' + #pageable.pageNumber + ':' + #pageable.pageSize + ':' + #pageable.sort"
+    )
     public Page<TripResponse> getTrips(String fromCity, String toCity, LocalDate date, Pageable pageable) {
         log.info("Searching trips: from={}, to={}, date={}", fromCity, toCity, date);
         
@@ -133,7 +136,7 @@ public class TripService {
         log.info("Trip deleted: ID={}", id);
         
         TripCancelledEvent event = tripMapper.toCancelledEvent(trip);
-        kafkaTemplate.send("trip.cancelled", event.tripId().toString(), event);
+        outboxService.saveEvent(trip.getId(), EventType.TRIP_CANCELLED, event);
     }
 
 }

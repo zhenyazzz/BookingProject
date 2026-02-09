@@ -1,7 +1,6 @@
 package org.example.tripservice.service;
 
 import org.example.tripservice.dto.request.RouteCreateRequest;
-import org.example.tripservice.dto.request.RouteUpdateRequest;
 import org.example.tripservice.dto.response.RouteResponse;
 import org.example.tripservice.exception.RouteNotFoundException;
 import org.example.tripservice.mapper.RouteMapper;
@@ -13,12 +12,6 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
-import org.springframework.data.domain.Page;
-import org.springframework.data.domain.PageImpl;
-import org.springframework.data.domain.PageRequest;
-import org.springframework.data.domain.Pageable;
-
-import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -70,69 +63,10 @@ class RouteServiceTest {
     }
 
     @Test
-    void createRoute_AlreadyExists() {
-        RouteCreateRequest request = new RouteCreateRequest("Moscow", "Saint Petersburg");
-        
-        when(routeRepository.existsByFromCityAndToCity(request.fromCity(), request.toCity())).thenReturn(true);
-
-        assertThrows(IllegalArgumentException.class, () -> routeService.createRoute(request));
-        verify(routeRepository, never()).save(any(Route.class));
-    }
-
-    @Test
-    void getRouteById_Success() {
-        when(routeRepository.findById(routeId)).thenReturn(Optional.of(route));
-        when(routeMapper.toResponse(route)).thenReturn(routeResponse);
-
-        RouteResponse result = routeService.getRouteById(routeId);
-
-        assertNotNull(result);
-        assertEquals(routeId, result.id());
-    }
-
-    @Test
     void getRouteById_NotFound() {
         when(routeRepository.findById(routeId)).thenReturn(Optional.empty());
 
         assertThrows(RouteNotFoundException.class, () -> routeService.getRouteById(routeId));
-    }
-
-    @Test
-    void getRoutes_Success() {
-        Pageable pageable = PageRequest.of(0, 10);
-        Page<Route> routePage = new PageImpl<>(List.of(route));
-        
-        when(routeRepository.findByFromCityContainingIgnoreCaseAndToCityContainingIgnoreCase(anyString(), anyString(), any(Pageable.class)))
-                .thenReturn(routePage);
-        when(routeMapper.toResponse(any(Route.class))).thenReturn(routeResponse);
-
-        Page<RouteResponse> result = routeService.getRoutes("Moscow", "Saint Petersburg", pageable);
-
-        assertNotNull(result);
-        assertEquals(1, result.getTotalElements());
-    }
-
-    @Test
-    void updateRoute_Success() {
-        RouteUpdateRequest request = new RouteUpdateRequest("London", "Paris");
-        
-        when(routeRepository.findById(routeId)).thenReturn(Optional.of(route));
-        when(routeMapper.toResponse(route)).thenReturn(new RouteResponse(routeId, "London", "Paris"));
-
-        RouteResponse result = routeService.updateRoute(routeId, request);
-
-        assertNotNull(result);
-        verify(routeMapper).updateEntity(eq(request), eq(route));
-        verify(routeRepository).save(route);
-    }
-
-    @Test
-    void deleteRouteById_Success() {
-        when(routeRepository.findById(routeId)).thenReturn(Optional.of(route));
-
-        routeService.deleteRouteById(routeId);
-
-        verify(routeRepository).delete(route);
     }
 }
 

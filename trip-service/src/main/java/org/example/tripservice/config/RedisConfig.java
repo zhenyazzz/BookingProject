@@ -1,9 +1,7 @@
 package org.example.tripservice.config;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.fasterxml.jackson.databind.SerializationFeature;
-import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
-import org.example.tripservice.dto.response.TripResponse;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.data.redis.cache.RedisCacheConfiguration;
@@ -16,16 +14,15 @@ import java.time.Duration;
 public class RedisConfig {
 
     @Bean
-    public RedisCacheConfiguration cacheConfiguration() {
-        ObjectMapper objectMapper = new ObjectMapper();
-        objectMapper.registerModule(new JavaTimeModule());
-        objectMapper.disable(SerializationFeature.WRITE_DATES_AS_TIMESTAMPS);
-
-        Jackson2JsonRedisSerializer<TripResponse> serializer =
-                new Jackson2JsonRedisSerializer<>(objectMapper, TripResponse.class);
+    public RedisCacheConfiguration cacheConfiguration(
+        @Value("${trip.cache.ttl-minutes:10}") long ttlMinutes,
+        ObjectMapper objectMapper
+    ) {
+        Jackson2JsonRedisSerializer<Object> serializer =
+                new Jackson2JsonRedisSerializer<>(objectMapper, Object.class);
 
         return RedisCacheConfiguration.defaultCacheConfig()
-                .entryTtl(Duration.ofMinutes(10))
+                .entryTtl(Duration.ofMinutes(ttlMinutes))
                 .disableCachingNullValues()
                 .serializeValuesWith(RedisSerializationContext.SerializationPair.fromSerializer(serializer));
     }

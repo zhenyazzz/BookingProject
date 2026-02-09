@@ -57,3 +57,11 @@ management:
       exposure:
         include: health,info,metrics,prometheus
 
+trip:
+  cache:
+    ttl-minutes: 10
+  kafka:
+    dlq-topic: trip.dead-letter
+  outbox:
+    max-retries: 5
+

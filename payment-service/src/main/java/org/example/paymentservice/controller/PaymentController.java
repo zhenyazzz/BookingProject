@@ -5,10 +5,9 @@ import lombok.extern.slf4j.Slf4j;
 
 import org.example.paymentservice.dto.CreatePaymentRequest;
 import org.example.paymentservice.dto.PaymentListItemResponse;
-import org.example.paymentservice.dto.PaymentResponse;
 import org.example.paymentservice.dto.PaymentStatusResponse;
-import org.example.paymentservice.model.Payment;
 import org.example.paymentservice.service.PaymentService;
+import jakarta.validation.Valid;
 import org.springframework.http.ResponseEntity;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.media.Content;
@@ -36,7 +35,7 @@ public class PaymentController {
             @ApiResponse(responseCode = "500", description = "Internal server error")
     })
     @PostMapping
-    public ResponseEntity<String> createPayment(@RequestBody CreatePaymentRequest request) {
+    public ResponseEntity<String> createPayment(@Valid @RequestBody CreatePaymentRequest request) {
         try {
             String paymentUrl = paymentService.createPayment(request);
             return ResponseEntity.ok(paymentUrl);
@@ -85,8 +84,6 @@ public class PaymentController {
     public ResponseEntity<String> handleStripeWebhook(
             @RequestBody String payload,
             @RequestHeader("Stripe-Signature") String signature) {
-
-        log.debug("Received Stripe webhook: {}", payload);
 
         try {
             paymentService.handleStripeWebhook(payload, signature);

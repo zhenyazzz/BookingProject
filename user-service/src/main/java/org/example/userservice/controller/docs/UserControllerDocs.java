@@ -9,6 +9,9 @@ import io.swagger.v3.oas.annotations.tags.Tag;
 import org.example.userservice.dto.response.UserResponse;
 import org.springframework.data.domain.Page;
 import org.springframework.http.ResponseEntity;
+import jakarta.validation.constraints.Max;
+import jakarta.validation.constraints.Min;
+import jakarta.validation.constraints.PositiveOrZero;
 
 import java.util.UUID;
 
@@ -24,8 +27,8 @@ public interface UserControllerDocs {
         }
     )
     ResponseEntity<Page<UserResponse>> getUsers(
-            @Parameter(description = "Page number (0-based)") int page,
-            @Parameter(description = "Number of items per page") int size,
+            @Parameter(description = "Page number (0-based)") @PositiveOrZero int page,
+            @Parameter(description = "Number of items per page") @Min(1) @Max(100) int size,
             @Parameter(description = "Sorting, e.g. createdAt,desc") String sort
     );
 

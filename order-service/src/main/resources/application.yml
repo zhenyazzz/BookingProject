@@ -38,7 +38,18 @@ inventory:
   grpc:
     host: ${INVENTORY_GRPC_HOST:localhost}
     port: ${INVENTORY_GRPC_PORT:9090}
+    timeout-seconds: ${INVENTORY_GRPC_TIMEOUT_SECONDS:3}
+    retry:
+      max-attempts: ${INVENTORY_GRPC_RETRY_MAX_ATTEMPTS:3}
+      delay-ms: ${INVENTORY_GRPC_RETRY_DELAY_MS:200}
+      multiplier: ${INVENTORY_GRPC_RETRY_MULTIPLIER:2.0}
 
 trip:
   service:
     url: ${TRIP_SERVICE_URL:http://trip-service:8086}
+
+order:
+  outbox:
+    max-retries: 5
+  kafka:
+    dlq-topic: ${ORDER_KAFKA_DLQ_TOPIC:order.dead-letter}

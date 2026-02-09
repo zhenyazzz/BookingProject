@@ -8,6 +8,8 @@ import com.stripe.net.Webhook;
 import jakarta.transaction.Transactional;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.example.paymentservice.exception.InvalidStripeSignatureException;
+import org.example.paymentservice.model.OutboxEvent;
 import org.example.paymentservice.model.Payment;
 import org.example.paymentservice.model.PaymentStatus;
 import org.example.paymentservice.repository.PaymentRepository;
@@ -17,9 +19,11 @@ import org.springframework.stereotype.Service;
 import org.example.paymentservice.dto.CreatePaymentRequest;
 import org.example.paymentservice.dto.PaymentListItemResponse;
 import org.example.paymentservice.dto.PaymentStatusResponse;
+import org.example.paymentservice.repository.OutboxEventRepository;
 
 import com.stripe.param.checkout.SessionCreateParams;
 import org.example.kafka.event.PaymentSucceededEvent;
+import org.example.kafka.event.EventType;
 import org.example.kafka.event.PaymentFailedEvent;
 
 import java.time.LocalDateTime;
@@ -27,7 +31,9 @@ import java.time.Instant;
 import java.util.List;
 import java.util.UUID;
 import java.math.BigDecimal;
+import java.math.RoundingMode;
 import java.util.stream.Collectors;
+import com.fasterxml.jackson.databind.ObjectMapper;
 
 @Service
 @RequiredArgsConstructor
@@ -43,64 +49,112 @@ public class PaymentService {
     private String cancelUrl;
 
     private final PaymentRepository paymentRepository;
-    private final KafkaTemplate<String, Object> kafkaTemplate;
-
+    private final OutboxService outboxService;
 
     @Transactional
     public String createPayment(CreatePaymentRequest request) throws StripeException {
-        Payment payment = new Payment();
-        payment.setOrderId(request.orderId());
-        payment.setAmount(request.amount());
-        payment.setCurrency(request.currency() != null ? request.currency().toUpperCase() : "USD");
-        payment.setStatus(PaymentStatus.PENDING);
-        payment.setCreatedAt(LocalDateTime.now());
-        
-        payment = paymentRepository.save(payment);
-        
-        try {
-            SessionCreateParams params = SessionCreateParams.builder()
-                    .addPaymentMethodType(com.stripe.param.checkout.SessionCreateParams.PaymentMethodType.CARD)
-                    .setMode(SessionCreateParams.Mode.PAYMENT)
-                    .setSuccessUrl(successUrl + "?orderId=" + request.orderId())
-                    .setCancelUrl(cancelUrl + "?orderId=" + request.orderId())
-                    .addLineItem(
-                            SessionCreateParams.LineItem.builder()
-                                    .setQuantity(1L)
-                                    .setPriceData(
-                                            SessionCreateParams.LineItem.PriceData.builder()
-                                                    .setCurrency(request.currency() != null ? request.currency() : "usd")
-                                                    .setUnitAmount(request.amount().multiply(BigDecimal.valueOf(100)).longValue())
-                                                    .setProductData(
-                                                            SessionCreateParams.LineItem.PriceData.ProductData.builder()
-                                                                    .setName(request.description() != null ? request.description() : "Order #" + request.orderId())
-                                                                    .build()
-                                                    )
-                                                    .build()
-                                    )
-                                    .build()
-                    )
-                    .putMetadata("orderId", request.orderId().toString())
-                    .setPaymentIntentData(
-                        SessionCreateParams.PaymentIntentData.builder()
-                            .putMetadata("orderId", request.orderId().toString())
-                            .build()
-                    )                    
-                    .build();
+        String normalizedCurrency = normalizeCurrency(request);
+        Payment payment = getOrPreparePayment(request);
+        if (payment.getStatus() == PaymentStatus.PENDING && payment.getCheckoutSessionUrl() != null) {
+            return payment.getCheckoutSessionUrl();
+        }
+        payment = savePaymentDetails(payment, request, normalizedCurrency);
 
-            Session session = Session.create(params);
-            
-            payment.setPaymentIntentId(session.getPaymentIntent());
-            
-            
+        try {
+            long amountCents = toAmountCents(request.amount());
+            Session session = createStripeSession(request, normalizedCurrency, amountCents);
+            updatePaymentWithSession(payment, session);
             log.info("Payment session created for order {}", request.orderId());
             return session.getUrl();
-            
         } catch (Exception e) {
-            payment.setStatus(PaymentStatus.FAILED);
-            paymentRepository.save(payment);
+            markPaymentFailed(payment);
             throw e;
         }
     }
+
+    private String normalizeCurrency(CreatePaymentRequest request) {
+        return request.currency() != null ? request.currency().toUpperCase() : "USD";
+    }
+
+    private Payment getOrPreparePayment(CreatePaymentRequest request) {
+        Payment payment = paymentRepository.findByOrderId(request.orderId()).orElse(null);
+        if (payment == null) {
+            payment = new Payment();
+            payment.setOrderId(request.orderId());
+            payment.setCreatedAt(LocalDateTime.now());
+            payment.setStatus(PaymentStatus.PENDING);
+            return payment;
+        }
+
+        if (payment.getStatus() == PaymentStatus.PENDING && payment.getCheckoutSessionUrl() != null) {
+            return payment;
+        }
+        if (payment.getStatus() == PaymentStatus.SUCCEEDED) {
+            throw new IllegalStateException("Payment already succeeded for order " + request.orderId());
+        }
+
+        payment.setStatus(PaymentStatus.PENDING);
+        payment.setPaidAt(null);
+        payment.setCancelledAt(null);
+        payment.setCreatedAt(LocalDateTime.now());
+        return payment;
+    }
+
+    private Payment savePaymentDetails(Payment payment, CreatePaymentRequest request, String normalizedCurrency) {
+        payment.setAmount(request.amount());
+        payment.setCurrency(normalizedCurrency);
+        return paymentRepository.save(payment);
+    }
+
+    private Session createStripeSession(CreatePaymentRequest request, String normalizedCurrency, long amountCents) throws StripeException {
+        SessionCreateParams params = SessionCreateParams.builder()
+                .addPaymentMethodType(com.stripe.param.checkout.SessionCreateParams.PaymentMethodType.CARD)
+                .setMode(SessionCreateParams.Mode.PAYMENT)
+                .setSuccessUrl(successUrl + "?orderId=" + request.orderId())
+                .setCancelUrl(cancelUrl + "?orderId=" + request.orderId())
+                .addLineItem(
+                        SessionCreateParams.LineItem.builder()
+                                .setQuantity(1L)
+                                .setPriceData(
+                                        SessionCreateParams.LineItem.PriceData.builder()
+                                                .setCurrency(normalizedCurrency.toLowerCase())
+                                                .setUnitAmount(amountCents)
+                                                .setProductData(
+                                                        SessionCreateParams.LineItem.PriceData.ProductData.builder()
+                                                                .setName(request.description() != null ? request.description() : "Order #" + request.orderId())
+                                                                .build()
+                                                )
+                                                .build()
+                                )
+                                .build()
+                )
+                .putMetadata("orderId", request.orderId().toString())
+                .setPaymentIntentData(
+                    SessionCreateParams.PaymentIntentData.builder()
+                        .putMetadata("orderId", request.orderId().toString())
+                        .build()
+                )
+                .build();
+        return Session.create(params);
+    }
+
+    private long toAmountCents(BigDecimal amount) {
+        BigDecimal scaled = amount.setScale(2, RoundingMode.HALF_UP);
+        return scaled.multiply(BigDecimal.valueOf(100)).longValueExact();
+    }
+
+    private void updatePaymentWithSession(Payment payment, Session session) {
+        payment.setPaymentIntentId(session.getPaymentIntent());
+        payment.setCheckoutSessionId(session.getId());
+        payment.setCheckoutSessionUrl(session.getUrl());
+        paymentRepository.save(payment);
+    }
+
+    private void markPaymentFailed(Payment payment) {
+        payment.setStatus(PaymentStatus.FAILED);
+        paymentRepository.save(payment);
+    }
+
 
     @Transactional
     public void handleStripeWebhook(String payload, String signature) {
@@ -110,8 +164,8 @@ public class PaymentService {
         try {
             event = Webhook.constructEvent(payload, signature, webhookSecret);
         } catch (Exception e) {
-            log.warn("Invalid Stripe webhook signature", e);
-            return;
+            log.warn("Invalid Stripe webhook signature");
+            throw new InvalidStripeSignatureException("Invalid Stripe webhook signature", e);
         }
 
         if (!isSupportedEvent(event.getType())) {
@@ -171,11 +225,7 @@ public class PaymentService {
                 Instant.now()
         );
 
-        kafkaTemplate.send(
-                "payment.succeeded",
-                payment.getOrderId().toString(),
-                event
-        );
+        outboxService.saveEvent(payment.getOrderId(), EventType.PAYMENT_SUCCEEDED, event);
 
         log.info("Payment succeeded for order {}", payment.getOrderId());
     }
@@ -195,16 +245,13 @@ public class PaymentService {
 
         PaymentFailedEvent event = new PaymentFailedEvent(
                 UUID.randomUUID(),
+                payment.getId(),
                 payment.getOrderId(),
                 "Stripe payment failed",
                 Instant.now()
         );
 
-        kafkaTemplate.send(
-                "payment.failed",
-                payment.getOrderId().toString(),
-                event
-        );
+        outboxService.saveEvent(payment.getOrderId(), EventType.PAYMENT_FAILED, event);
 
         log.info("Payment failed for order {}", payment.getOrderId());
     }

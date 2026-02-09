@@ -1,4 +1,4 @@
-package org.example.userservice.unit;
+package org.example.userservice.service;
 
 import org.example.userservice.dto.request.UpdateUserRequest;
 import org.example.userservice.dto.response.ProfileResponse;
@@ -7,10 +7,10 @@ import org.example.userservice.exception.UserNotFoundException;
 import org.example.userservice.mapper.UserMapper;
 import org.example.userservice.model.User;
 import org.example.userservice.repository.UserRepository;
-import org.example.userservice.service.UserService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
@@ -75,17 +75,22 @@ class UserServiceTests {
 
     @Test
     void updateMyProfile_UserFound_ReturnsUpdatedProfileResponse() {
-        UpdateUserRequest updateUserRequest = new UpdateUserRequest("Jane", "Doe", "+375299999999");
+        UpdateUserRequest updateUserRequest = new UpdateUserRequest("  Jane  ", " ", " +375299999999 ");
         when(userRepository.findById(userId)).thenReturn(Optional.of(user));
-        doNothing().when(userMapper).updateUserFromRequest(updateUserRequest, user);
+        doNothing().when(userMapper).updateUserFromRequest(any(UpdateUserRequest.class), eq(user));
         when(userMapper.toProfileResponse(user)).thenReturn(profileResponse);
 
         ProfileResponse result = userService.updateMyProfile(userId, updateUserRequest);
 
+        ArgumentCaptor<UpdateUserRequest> requestCaptor = ArgumentCaptor.forClass(UpdateUserRequest.class);
         assertNotNull(result);
         assertEquals(profileResponse, result);
         verify(userRepository, times(1)).findById(userId);
-        verify(userMapper, times(1)).updateUserFromRequest(updateUserRequest, user);
+        verify(userMapper, times(1)).updateUserFromRequest(requestCaptor.capture(), eq(user));
+        UpdateUserRequest normalizedRequest = requestCaptor.getValue();
+        assertEquals("Jane", normalizedRequest.firstName());
+        assertNull(normalizedRequest.lastName());
+        assertEquals("+375299999999", normalizedRequest.phoneNumber());
         verify(userMapper, times(1)).toProfileResponse(user);
     }
 

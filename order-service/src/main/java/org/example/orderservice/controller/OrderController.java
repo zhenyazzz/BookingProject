@@ -26,7 +26,8 @@ public class OrderController implements OrderControllerDocs {
     @Override
     @PostMapping
     public ResponseEntity<OrderResponse> createOrder(@Valid @RequestBody CreateOrderRequest request) {
-        return ResponseEntity.ok(orderService.createOrder(request));
+        UUID currentUserId = SecurityUtils.currentUserId();
+        return ResponseEntity.ok(orderService.createOrder(request, currentUserId));
     }
 
     @Override

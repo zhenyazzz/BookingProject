@@ -8,6 +8,7 @@ import org.example.userservice.service.UserService;
 import org.springframework.data.domain.Page;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.UUID;
@@ -16,6 +17,7 @@ import java.util.UUID;
 @RequestMapping("/admin/users")
 @RequiredArgsConstructor
 @Slf4j
+@Validated
 @PreAuthorize("hasRole('ADMIN')")
 public class UserController implements UserControllerDocs {
 

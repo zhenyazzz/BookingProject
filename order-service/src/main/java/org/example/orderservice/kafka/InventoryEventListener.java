@@ -12,7 +12,7 @@ public class InventoryEventListener {
 
     private final OrderService orderService;
 
-    @KafkaListener(topics = "reservation.expired", groupId = "order-service")
+    @KafkaListener(topics = "reservation.expired")
     public void onReservationExpired(ReservationExpiredEvent event) {
         orderService.handleReservationExpired(event);
     }

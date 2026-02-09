@@ -30,6 +30,7 @@ import jakarta.persistence.EnumType;
         @Index(name = "idx_trip_status_departure", columnList = "status, departure_time"),
         @Index(name = "idx_trip_status_arrival", columnList = "status, arrival_time"),
         @Index(name = "idx_trip_route", columnList = "route_id"),
+        @Index(name = "idx_trip_route_departure", columnList = "route_id, departure_time"),
         @Index(name = "idx_trip_price", columnList = "price"),
         @Index(name = "idx_trip_departure_only", columnList = "departure_time")
     }

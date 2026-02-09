@@ -39,7 +39,7 @@ public interface MeControllerDocs {
         summary = "Delete my profile",
         description = "Deletes profile of the currently authenticated user",
         responses = {
-            @ApiResponse(responseCode = "24", description = "Profile deleted successfully"),
+            @ApiResponse(responseCode = "204", description = "Profile deleted successfully"),
             @ApiResponse(responseCode = "401", description = "Unauthorized")
         }
     )

@@ -15,13 +15,13 @@ public class PaymentEventListener {
 
     private final OrderService orderService;
 
-    @KafkaListener(topics = "payment.succeeded", groupId = "order-service")
+    @KafkaListener(topics = "payment.succeeded")
     public void onPaymentSucceeded(PaymentSucceededEvent event) {
         log.info("Received payment succeeded event: orderId={}", event.orderId());
         orderService.handlePaymentSucceeded(event);
     }
 
-    @KafkaListener(topics = "payment.failed", groupId = "order-service")
+    @KafkaListener(topics = "payment.failed")
     public void onPaymentFailed(PaymentFailedEvent event) {
         log.info("Received payment failed event: orderId={}, reason={}", event.orderId(), event.reason());
         orderService.handlePaymentFailed(event);

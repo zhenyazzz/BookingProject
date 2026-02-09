@@ -22,7 +22,7 @@ import java.util.UUID;
 @Tag(name = "Orders", description = "API for managing booking orders")
 public interface OrderControllerDocs {
 
-    @Operation(summary = "Create an order", description = "Creates a new order based on the provided request.")
+    @Operation(summary = "Create an order", description = "Creates a new order. User ID is taken from JWT (caller must forward Authorization header when calling from another service).")
     @ApiResponses(value = {
             @ApiResponse(responseCode = "200", description = "Order created successfully",
                     content = @Content(schema = @Schema(implementation = OrderResponse.class))),

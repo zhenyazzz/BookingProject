@@ -20,29 +20,18 @@ import java.util.UUID;
 @Repository
 public interface OrderRepository extends JpaRepository<Order, UUID>, JpaSpecificationExecutor<Order> {
     
-    /**
-     * Находит заказ по reservationId
-     */
+
     Optional<Order> findByReservationId(UUID reservationId);
     
-    /**
-     * Находит все заказы пользователя
-     */
+
     Page<Order> findByUserId(UUID userId, Pageable pageable);
-    
-    /**
-     * Находит все заказы по рейсу
-     */
+
     Page<Order> findByTripId(UUID tripId, Pageable pageable);
     
-    /**
-     * Находит все заказы по статусу
-     */
+
     Page<Order> findByStatus(OrderStatus status, Pageable pageable);
     
-    /**
-     * Рассчитывает общий доход за период
-     */
+
     @Query("""
         SELECT COALESCE(SUM(o.totalPrice), 0)
         FROM Order o
@@ -54,10 +43,7 @@ public interface OrderRepository extends JpaRepository<Order, UUID>, JpaSpecific
         @Param("startDate") Instant startDate,
         @Param("endDate") Instant endDate
     );
-    
-    /**
-     * Получает статистику доходов по дням
-     */
+
     @Query("""
         SELECT DATE(o.createdAt) as date, 
                SUM(o.totalPrice) as revenue, 
@@ -74,9 +60,7 @@ public interface OrderRepository extends JpaRepository<Order, UUID>, JpaSpecific
         @Param("endDate") LocalDate endDate
     );
     
-    /**
-     * Рассчитывает средний чек
-     */
+    
     @Query("""
         SELECT COALESCE(AVG(o.totalPrice), 0)
         FROM Order o
@@ -88,10 +72,7 @@ public interface OrderRepository extends JpaRepository<Order, UUID>, JpaSpecific
         @Param("startDate") Instant startDate,
         @Param("endDate") Instant endDate
     );
-    
-    /**
-     * Подсчитывает количество заказов по статусам
-     */
+
     @Query("""
         SELECT o.status, COUNT(o)
         FROM Order o
@@ -103,4 +84,6 @@ public interface OrderRepository extends JpaRepository<Order, UUID>, JpaSpecific
         @Param("startDate") Instant startDate,
         @Param("endDate") Instant endDate
     );
+
+    Optional<Order> findByIdAndUserId(UUID orderId, UUID userId);
 }

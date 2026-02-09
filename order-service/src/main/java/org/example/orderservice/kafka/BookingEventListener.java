@@ -14,17 +14,16 @@ public class BookingEventListener {
 
     private final OrderService orderService;
 
-    @KafkaListener(topics = "booking.failed", groupId = "order-service")
+    @KafkaListener(topics = "booking.failed")
     public void onBookingFailed(BookingFailedEvent event) {
         log.info("Received booking failed event: bookingId={}, reason={}", event.bookingId(), event.reason());
         
         if (event.orderId() != null) {
             try {
-                orderService.cancelOrder(event.orderId());
+                orderService.applyOrderCancelled(event.orderId());
                 log.info("Cancelled order for failed booking: orderId={}", event.orderId());
             } catch (Exception e) {
                 log.error("Failed to cancel order for failed booking: orderId={}", event.orderId(), e);
-                // Throwing exception to retry via Kafka if Order Service is temporarily down (e.g. DB issue)
                 throw e; 
             }
         } else {

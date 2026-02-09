@@ -17,6 +17,7 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 
+import java.util.List;
 import java.util.UUID;
 
 @Service
@@ -48,7 +49,8 @@ public class UserService {
         User user = findExistingUser(userId);
 
         log.info("Updating profile for user {}", userId);
-        userMapper.updateUserFromRequest(request, user);
+        UpdateUserRequest normalizedRequest = normalizeUpdateRequest(request);
+        userMapper.updateUserFromRequest(normalizedRequest, user);
 
         return userMapper.toProfileResponse(user);
     }
@@ -63,6 +65,11 @@ public class UserService {
 
     @Transactional
     public Page<UserResponse> getUsersWithPagination(int page, int size, String sort) {
+        List<String> allowedSortFields = List.of("createdAt", "email", "firstName", "lastName", "phoneNumber");
+        if (!allowedSortFields.contains(sort)) {
+            log.warn("Invalid sort parameter '{}', defaulting to createdAt DESC", sort);
+            sort = "createdAt,desc";
+        }
         Pageable pageable = PageRequest.of(page, size, parseSort(sort));
 
         log.info("Admin requested users list: page={}, size={}, sort={}", page, size, sort);
@@ -96,17 +103,37 @@ public class UserService {
 
         User user = new User();
         user.setId(userId);
-        user.setEmail(SecurityUtils.currentUserEmail());
-        
+
+        String email = SecurityUtils.currentUserEmail();
         String firstName = SecurityUtils.currentUserFirstName();
         String lastName = SecurityUtils.currentUserLastName();
         String phoneNumber = SecurityUtils.currentUserPhoneNumber();
+        if (email == null || email.isBlank()) {
+            log.warn("Missing email claim for user {}", userId);
+            throw new IllegalStateException("Email claim is missing in token");
+        }
         
+        user.setEmail(email);
         if (firstName != null) user.setFirstName(firstName);
         if (lastName != null) user.setLastName(lastName);
         if (phoneNumber != null) user.setPhoneNumber(phoneNumber);
 
         return userRepository.save(user);
+    }
+
+    private UpdateUserRequest normalizeUpdateRequest(UpdateUserRequest request) {
+        return new UpdateUserRequest(
+                normalizeField(request.firstName()),
+                normalizeField(request.lastName()),
+                normalizeField(request.phoneNumber())
+        );
+    }
+
+    private String normalizeField(String value) {
+        if (value == null || value.isBlank()) {
+            return null;
+        }
+        return value.trim();
     }
 
     private Sort parseSort(String sort) {

@@ -12,6 +12,7 @@ public interface OrderMapper {
     OrderResponse toResponse(Order order);
 
     @Mapping(target = "id", ignore = true)
+    @Mapping(target = "userId", ignore = true)
     @Mapping(target = "totalPrice", ignore = true)
     @Mapping(target = "status", ignore = true)
     @Mapping(target = "createdAt", ignore = true)

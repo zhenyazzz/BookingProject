@@ -69,7 +69,7 @@ public class BookingService {
 
         BigDecimal tripPrice = trip.price();
     
-        OrderResponse orderResponse = createOrder(booking, userId, reservationId, tripPrice);
+        OrderResponse orderResponse = createOrder(booking, reservationId, tripPrice);
         UUID orderId = orderResponse.id();
         
         booking.waitForPayment(orderId);
@@ -171,10 +171,9 @@ public class BookingService {
         }
     }
 
-    private OrderResponse createOrder(Booking booking, UUID userId, UUID reservationId, BigDecimal price) {
+    private OrderResponse createOrder(Booking booking, UUID reservationId, BigDecimal price) {
         try {
             CreateOrderRequest orderRequest = new CreateOrderRequest(
-                    userId,
                     booking.getTripId(),
                     reservationId,
                     price,

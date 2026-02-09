@@ -3,6 +3,7 @@ package org.example.orderservice.service;
 import jakarta.transaction.Transactional;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.example.kafka.event.EventType;
 import org.example.kafka.event.OrderCancelledEvent;
 import org.example.kafka.event.OrderConfirmedEvent;
 import org.example.kafka.event.OrderCreatedEvent;
@@ -10,6 +11,7 @@ import org.example.kafka.event.PaymentFailedEvent;
 import org.example.kafka.event.PaymentSucceededEvent;
 import org.example.orderservice.dto.CreateOrderRequest;
 import org.example.orderservice.dto.OrderResponse;
+import org.example.orderservice.exception.OrderNotFoundException;
 import org.example.kafka.event.ReservationExpiredEvent;
 import org.example.orderservice.model.Order;
 import org.example.orderservice.model.OrderStatus;
@@ -18,10 +20,11 @@ import org.example.orderservice.service.client.InventoryServiceClient;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.domain.Specification;
-import org.springframework.kafka.core.KafkaTemplate;
+import org.springframework.security.access.AccessDeniedException;
 import org.springframework.stereotype.Service;
 
 import org.example.orderservice.mapper.OrderMapper;
+import org.example.orderservice.util.SecurityUtils;
 import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.UUID;
@@ -32,18 +35,18 @@ import java.util.UUID;
 public class OrderService {
     private final OrderRepository orderRepository;
     private final InventoryServiceClient inventoryServiceClient;
-    private final KafkaTemplate<String, Object> kafkaTemplate;
+    private final OutboxService outboxService;
     private final OrderMapper orderMapper;
 
     @Transactional
-    public OrderResponse createOrder(CreateOrderRequest request) {
-        log.info("Creating order: userId={}, tripId={}, seatsCount={}, reservationId={}, price={}", 
-                request.userId(), request.tripId(), request.seatsCount(), request.reservationId(), request.price());
-        
+    public OrderResponse createOrder(CreateOrderRequest request, UUID userId) {
+        log.info("Creating order: userId={}, tripId={}, seatsCount={}, reservationId={}, price={}",
+                userId, request.tripId(), request.seatsCount(), request.reservationId(), request.price());
+
         BigDecimal totalPrice = request.price().multiply(BigDecimal.valueOf(request.seatsCount()));
-        
+
         Order order = Order.builder()
-                .userId(request.userId())
+                .userId(userId)
                 .tripId(request.tripId())
                 .seatsCount(request.seatsCount())
                 .totalPrice(totalPrice)
@@ -53,9 +56,13 @@ public class OrderService {
         
         Order savedOrder = orderRepository.save(order);
         log.info("Order created: orderId={}", savedOrder.getId());
-        
-        publishOrderCreatedEvent(savedOrder);
-        
+
+        outboxService.saveEvent(
+                savedOrder.getId(),
+                EventType.ORDER_CREATED,
+                new OrderCreatedEvent(UUID.randomUUID(), savedOrder.getId(), Instant.now())
+        );
+
         return orderMapper.toResponse(savedOrder);
     }
 
@@ -63,7 +70,11 @@ public class OrderService {
 
     public OrderResponse getOrderById(UUID orderId) {
         Order order = orderRepository.findById(orderId)
-                .orElseThrow(() -> new RuntimeException("Order not found: " + orderId));
+                .orElseThrow(() -> new OrderNotFoundException("Order not found: " + orderId));
+        UUID currentUserId = SecurityUtils.currentUserId();
+        if (!order.getUserId().equals(currentUserId) && !SecurityUtils.hasRole("ADMIN")) {
+            throw new AccessDeniedException("You are not authorized to view this order");
+        }
         log.debug("Order found: orderId={}", orderId);
         return orderMapper.toResponse(order);
     }
@@ -87,41 +98,72 @@ public class OrderService {
 
     @Transactional
     public void confirmOrder(UUID orderId) {
-        log.info("Confirming order: orderId={}", orderId);
         Order order = orderRepository.findById(orderId)
-                .orElseThrow(() -> new RuntimeException("Order not found: " + orderId));
+                .orElseThrow(() -> new OrderNotFoundException("Order not found: " + orderId));
+        UUID currentUserId = SecurityUtils.currentUserId();
+        if (!order.getUserId().equals(currentUserId) && !SecurityUtils.hasRole("ADMIN")) {
+            throw new AccessDeniedException("You are not authorized to confirm this order");
+        }
+        doConfirmOrder(order);
+    }
 
+    @Transactional
+    public void applyPaymentSucceeded(UUID orderId) {
+        log.info("Applying payment succeeded: orderId={}", orderId);
+        Order order = orderRepository.findById(orderId)
+                .orElseThrow(() -> new OrderNotFoundException("Order not found: " + orderId));
+        doConfirmOrder(order);
+    }
+
+    private void doConfirmOrder(Order order) {
         if (order.getStatus() != OrderStatus.PENDING) {
-            log.warn("Order is not in PENDING status: orderId={}, status={}", orderId, order.getStatus());
+            log.warn("Order is not in PENDING status: orderId={}, status={}", order.getId(), order.getStatus());
             return;
         }
-
         order.confirm();
         orderRepository.save(order);
-
         if (order.getReservationId() != null) {
             inventoryServiceClient.confirmReservation(order.getReservationId());
             log.debug("Reservation confirmed: reservationId={}", order.getReservationId());
         }
-
-        publishOrderConfirmedEvent(order);
-        
-        log.info("Order confirmed: orderId={}", orderId);
+        outboxService.saveEvent(
+                order.getId(),
+                EventType.ORDER_CONFIRMED,
+                new OrderConfirmedEvent(UUID.randomUUID(), order.getId(), Instant.now())
+        );
+        log.info("Order confirmed: orderId={}", order.getId());
     }
 
     @Transactional
     public void cancelOrder(UUID orderId) {
-        log.info("Cancelling order: orderId={}", orderId);
         Order order = orderRepository.findById(orderId)
-                .orElseThrow(() -> new RuntimeException("Order not found: " + orderId));
+                .orElseThrow(() -> new OrderNotFoundException("Order not found: " + orderId));
+        UUID currentUserId = SecurityUtils.currentUserId();
+        if (!order.getUserId().equals(currentUserId) && !SecurityUtils.hasRole("ADMIN")) {
+            throw new AccessDeniedException("You are not authorized to cancel this order");
+        }
+        doCancelOrder(order);
+    }
 
-        if (order.getStatus() == OrderStatus.CANCELLED) {
-            log.debug("Order already cancelled: orderId={}", orderId);
+    @Transactional
+    public void applyOrderCancelled(UUID orderId) {
+        log.info("Applying order cancellation (event): orderId={}", orderId);
+        Order order = orderRepository.findById(orderId)
+                .orElseThrow(() -> new OrderNotFoundException("Order not found: " + orderId));
+        if (order.getStatus() != OrderStatus.PENDING) {
+            log.warn("Skipping cancellation for non-PENDING order: orderId={}, status={}", order.getId(), order.getStatus());
             return;
         }
+        doCancelOrder(order);
+    }
 
+    private void doCancelOrder(Order order) {
+        if (order.getStatus() == OrderStatus.CANCELLED) {
+            log.debug("Order already cancelled: orderId={}", order.getId());
+            return;
+        }
         cancelOrderProcess(order);
-        log.info("Order cancelled: orderId={}", orderId);
+        log.info("Order cancelled: orderId={}", order.getId());
     }
 
     @Transactional
@@ -134,7 +176,11 @@ public class OrderService {
                             if (order.getStatus() == OrderStatus.PENDING) {
                                 order.cancel();
                                 orderRepository.save(order);
-                                publishOrderCancelledEvent(order);
+                                outboxService.saveEvent(
+                                        order.getId(),
+                                        EventType.ORDER_CANCELLED,
+                                        new OrderCancelledEvent(UUID.randomUUID(), order.getId(), Instant.now())
+                                );
                             } else {
                                 log.debug("Order is not in PENDING status, skipping: orderId={}, status={}", 
                                         order.getId(), order.getStatus());
@@ -147,13 +193,13 @@ public class OrderService {
     @Transactional
     public void handlePaymentSucceeded(PaymentSucceededEvent event) {
         log.info("Handling payment succeeded event: orderId={}", event.orderId());
-        confirmOrder(event.orderId());
+        applyPaymentSucceeded(event.orderId());
     }
 
     @Transactional
     public void handlePaymentFailed(PaymentFailedEvent event) {
         log.info("Handling payment failed event: orderId={}, reason={}", event.orderId(), event.reason());
-        cancelOrder(event.orderId());
+        applyOrderCancelled(event.orderId());
     }
 
     private void cancelOrderProcess(Order order) {
@@ -171,48 +217,10 @@ public class OrderService {
             }
         }
 
-        publishOrderCancelledEvent(order);
-    }
-
-    private void publishOrderCreatedEvent(Order order) {
-        try {
-            OrderCreatedEvent event = new OrderCreatedEvent(
-                    UUID.randomUUID(),
-                    order.getId(),
-                    Instant.now()
-            );
-            kafkaTemplate.send("order.created", order.getId().toString(), event);
-            log.info("Order created event published: orderId={}", order.getId());
-        } catch (Exception e) {
-            log.error("Failed to publish order created event: orderId={}", order.getId(), e);
-        }
-    }
-
-    private void publishOrderConfirmedEvent(Order order) {
-        try {
-            OrderConfirmedEvent event = new OrderConfirmedEvent(
-                    UUID.randomUUID(),
-                    order.getId(),
-                    Instant.now()
-            );
-            kafkaTemplate.send("order.confirmed", order.getId().toString(), event);
-            log.info("Order confirmed event published: orderId={}", order.getId());
-        } catch (Exception e) {
-            log.error("Failed to publish order confirmed event: orderId={}", order.getId(), e);
-        }
-    }
-
-    private void publishOrderCancelledEvent(Order order) {
-        try {
-            OrderCancelledEvent event = new OrderCancelledEvent(
-                    UUID.randomUUID(),
-                    order.getId(),
-                    Instant.now()
-            );
-            kafkaTemplate.send("order.cancelled", order.getId().toString(), event);
-            log.info("Order cancelled event published: orderId={}", order.getId());
-        } catch (Exception e) {
-            log.error("Failed to publish order cancelled event: orderId={}", order.getId(), e);
-        }
+        outboxService.saveEvent(
+                order.getId(),
+                EventType.ORDER_CANCELLED,
+                new OrderCancelledEvent(UUID.randomUUID(), order.getId(), Instant.now())
+        );
     }
 }
